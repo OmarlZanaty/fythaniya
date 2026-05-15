@@ -83,18 +83,25 @@ async function main() {
     { providerId:'vodafone_cash', name:'Vodafone Cash Deposit', nameAr:'إيداع فودافون كاش', category:'TELECOM', min:50, max:5000, fee:0, pct:0.01, qa:[100,200,500,1000,2000], requiresPayLater:true },
   ];
 
+  // Idempotent: upsert by (serviceProviderId, name) so re-running the seed doesn't duplicate.
   for (const s of subServices) {
-    await prisma.subService.create({
-      data: {
-        serviceProviderId: s.providerId,
-        name: s.name, nameAr: s.nameAr, category: s.category,
-        minAmount: s.min, maxAmount: s.max,
-        fixedFee: s.fee, percentageFee: s.pct,
-        quickAmounts: JSON.stringify(s.qa),
-        requiresPayLater: s.requiresPayLater || false,
-        isActive: true, sortOrder: 0,
-      },
+    const existing = await prisma.subService.findFirst({
+      where: { serviceProviderId: s.providerId, name: s.name },
     });
+    const data = {
+      serviceProviderId: s.providerId,
+      name: s.name, nameAr: s.nameAr, category: s.category,
+      minAmount: s.min, maxAmount: s.max,
+      fixedFee: s.fee, percentageFee: s.pct,
+      quickAmounts: JSON.stringify(s.qa),
+      requiresPayLater: s.requiresPayLater || false,
+      isActive: true, sortOrder: 0,
+    };
+    if (existing) {
+      await prisma.subService.update({ where: { id: existing.id }, data });
+    } else {
+      await prisma.subService.create({ data });
+    }
   }
   console.log(`✅ ${subServices.length} sub-services seeded`);
 

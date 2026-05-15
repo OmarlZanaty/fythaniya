@@ -41,10 +41,11 @@ class _RewardsScreenState extends State<RewardsScreen> {
       builder: (ctx, state) {
         if (state is RewardsLoading) return _RewardsShimmer();
         if (state is RewardsError) return AppErrorWidget(message: state.msg, onRetry: () => ctx.read<RewardsBloc>().add(RewardsLoadEvent()));
-        if (state is RewardsLoaded || state is RewardsRedeeming) {
-          final s = state is RewardsLoaded ? state : (ctx.read<RewardsBloc>().state as RewardsLoaded);
-          final isRedeeming = state is RewardsRedeeming;
-          return _RewardsContent(summary: (s as RewardsLoaded).summary, vouchers: s.vouchers, isRedeeming: isRedeeming);
+        if (state is RewardsLoaded) {
+          return _RewardsContent(summary: state.summary, vouchers: state.vouchers, isRedeeming: false);
+        }
+        if (state is RewardsRedeeming) {
+          return _RewardsContent(summary: state.summary, vouchers: state.vouchers, isRedeeming: true);
         }
         return const SizedBox.shrink();
       },

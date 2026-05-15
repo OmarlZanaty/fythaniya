@@ -225,14 +225,23 @@ abstract class RewardsState extends Equatable { const RewardsState(); @override 
 class RewardsInitial   extends RewardsState {}
 class RewardsLoading   extends RewardsState {}
 class RewardsLoaded    extends RewardsState { final RewardsSummary summary; final List<VoucherModel> vouchers; const RewardsLoaded({required this.summary,required this.vouchers}); @override List<Object?> get props=>[summary,vouchers]; }
-class RewardsRedeeming extends RewardsState {}
+// Redeeming carries the previous loaded data so the screen can keep rendering during the API call.
+class RewardsRedeeming extends RewardsState { final RewardsSummary summary; final List<VoucherModel> vouchers; const RewardsRedeeming({required this.summary, required this.vouchers}); @override List<Object?> get props=>[summary,vouchers]; }
 class RewardsRedeemed  extends RewardsState { final String code; const RewardsRedeemed(this.code); @override List<Object?> get props=>[code]; }
 class RewardsError     extends RewardsState { final String msg; const RewardsError(this.msg); @override List<Object?> get props=>[msg]; }
 
 class RewardsBloc extends Bloc<RewardsEvent,RewardsState> {
   RewardsBloc():super(RewardsInitial()) { on<RewardsLoadEvent>(_load); on<RewardsRedeemEvent>(_redeem); }
   Future<void> _load  (RewardsLoadEvent e, Emitter<RewardsState> emit) async { emit(RewardsLoading()); try { final res=await Future.wait([UserRepo().getRewards(),UserRepo().getVouchers()]); emit(RewardsLoaded(summary:res[0] as RewardsSummary,vouchers:res[1] as List<VoucherModel>)); } on ApiException catch(ex) { emit(RewardsError(ex.message)); } }
-  Future<void> _redeem(RewardsRedeemEvent e, Emitter<RewardsState> emit) async { emit(RewardsRedeeming()); try { final d=await UserRepo().redeemVoucher(e.vId); emit(RewardsRedeemed(d['code'] as String)); } on ApiException catch(ex) { emit(RewardsError(ex.message)); } }
+  Future<void> _redeem(RewardsRedeemEvent e, Emitter<RewardsState> emit) async {
+    final prev = state;
+    if (prev is RewardsLoaded) emit(RewardsRedeeming(summary: prev.summary, vouchers: prev.vouchers));
+    try {
+      final d = await UserRepo().redeemVoucher(e.vId);
+      emit(RewardsRedeemed(d['code'] as String));
+    } on ApiException catch(ex) { emit(RewardsError(ex.message)); }
+    catch(ex, st) { print('[RewardsBloc.redeem] $ex\n$st'); emit(RewardsError('فشل الاستبدال: $ex')); }
+  }
 }
 
 // ════════════════════════════════════════════════════════

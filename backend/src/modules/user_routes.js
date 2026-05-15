@@ -179,7 +179,7 @@ router.get('/transactions', async (req, res, next) => {
 // ═══════════════════════════════════════════════════════════
 
 router.post('/wallet/topup',
-  [body('amount').isFloat({ min: 10, max: 10000 })],
+  [body('amount').isFloat({ min: 10, max: 10000 }).withMessage('المبلغ يجب أن يكون بين 10 و 10000 ج.م')],
   validate,
   async (req, res, next) => {
     try {

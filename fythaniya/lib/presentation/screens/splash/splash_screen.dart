@@ -50,5 +50,5 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           const SizedBox(height:56),
           CircularProgressIndicator(strokeWidth:2.5,color:Colors.white.withOpacity(0.7)),
         ]))))),
-      )));
+      ));
 }

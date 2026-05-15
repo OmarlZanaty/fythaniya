@@ -34,7 +34,10 @@ router.put('/profile', [body('fullName').optional().isLength({ min: 2 }), body('
         if (taken) return apiResponse.error(res, 'البريد الإلكتروني مستخدم', 409);
         data.email = email;
       }
-      const updated = await prisma.user.update({ where: { id: req.user.id }, data });
+      const updated = await prisma.user.update({
+        where: { id: req.user.id }, data,
+        select: { id:true, phone:true, fullName:true, email:true, type:true, status:true, kycVerified:true, pointsBalance:true, walletBalance:true, createdAt:true, lastLoginAt:true },
+      });
       return apiResponse.success(res, updated, 'تم التحديث');
     } catch (err) { next(err); }
   }
@@ -66,7 +69,7 @@ router.post('/requests',
     body('serviceProviderId').notEmpty(),
     body('subServiceId').optional(),
     body('type').isIn(['MOBILE_RECHARGE','BILL_PAYMENT','INTERNET_RECHARGE','TRANSFER']),
-    body('amount').isFloat({ min: 1 }),
+    body('amount').isFloat({ min: 1, max: 50000 }).withMessage('المبلغ يجب أن يكون بين 1 و 50000 ج.م'),
     body('accountNumber').optional(),
     body('phoneNumber').optional(),
   ], validate,
@@ -153,7 +156,18 @@ router.get('/transactions', async (req, res, next) => {
     const where = { userId: req.user.id };
     if (req.query.status) where.status = req.query.status;
     const [data, total] = await Promise.all([
-      prisma.transaction.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' }, include: { request: { include: { serviceProvider: true } } } }),
+      prisma.transaction.findMany({
+        where, skip, take: limit, orderBy: { createdAt: 'desc' },
+        include: {
+          request: {
+            select: {
+              id: true, type: true, status: true, accountNumber: true, phoneNumber: true,
+              serviceProvider: { select: { id: true, displayName: true, category: true } },
+              subService: { select: { id: true, nameAr: true } },
+            },
+          },
+        },
+      }),
       prisma.transaction.count({ where }),
     ]);
     return apiResponse.paginated(res, data, total, page, limit);
@@ -194,7 +208,7 @@ router.post('/wallet/topup',
 router.post('/wallet/transfer',
   [
     body('toPhone').trim().matches(/^[0-9+]{7,15}$/).withMessage('رقم هاتف المستلم غير صحيح'),
-    body('amount').isFloat({ min: 5 }),
+    body('amount').isFloat({ min: 5, max: 50000 }).withMessage('المبلغ يجب أن يكون بين 5 و 50000 ج.م'),
     body('note').optional().isLength({ max: 200 }),
   ],
   validate,
@@ -204,31 +218,41 @@ router.post('/wallet/transfer',
       const amount = Number(req.body.amount);
       const toPhoneTrim = toPhone.trim();
 
-      const sender = await prisma.user.findUnique({ where: { id: req.user.id }, select: { id: true, phone: true, walletBalance: true, fullName: true } });
-      if (sender.phone === toPhoneTrim) return apiResponse.error(res, 'لا يمكنك التحويل إلى نفسك', 400);
-      if (Number(sender.walletBalance) < amount) return apiResponse.error(res, 'الرصيد غير كافٍ', 400);
+      const senderPhone = (await prisma.user.findUnique({ where: { id: req.user.id }, select: { phone: true } }))?.phone;
+      if (senderPhone === toPhoneTrim) return apiResponse.error(res, 'لا يمكنك التحويل إلى نفسك', 400);
 
       const recipient = await prisma.user.findUnique({ where: { phone: toPhoneTrim }, select: { id: true, phone: true, fullName: true, status: true } });
       if (!recipient) return apiResponse.error(res, 'المستلم غير موجود', 404);
       if (recipient.status !== 'ACTIVE') return apiResponse.error(res, 'حساب المستلم غير نشط', 400);
 
-      const result = await prisma.$transaction(async (tx) => {
-        await tx.user.update({ where: { id: sender.id }, data: { walletBalance: { decrement: amount } } });
-        const recv = await tx.user.update({ where: { id: recipient.id }, data: { walletBalance: { increment: amount } }, select: { walletBalance: true } });
-        const senderTxn = await tx.transaction.create({
-          data: { userId: sender.id, amount, fee: 0, totalAmount: amount, status: 'SUCCESS', paymentMethod: 'TRANSFER_OUT', externalRef: recipient.phone },
+      // Atomic transfer with balance guard via conditional update (returns count=0 if insufficient).
+      let result;
+      try {
+        result = await prisma.$transaction(async (tx) => {
+          const dec = await tx.user.updateMany({
+            where: { id: req.user.id, walletBalance: { gte: amount } },
+            data: { walletBalance: { decrement: amount } },
+          });
+          if (dec.count === 0) throw new Error('INSUFFICIENT_BALANCE');
+          await tx.user.update({ where: { id: recipient.id }, data: { walletBalance: { increment: amount } } });
+          const senderTxn = await tx.transaction.create({
+            data: { userId: req.user.id, amount, fee: 0, totalAmount: amount, status: 'SUCCESS', paymentMethod: 'TRANSFER_OUT', externalRef: recipient.phone },
+          });
+          await tx.transaction.create({
+            data: { userId: recipient.id, amount, fee: 0, totalAmount: amount, status: 'SUCCESS', paymentMethod: 'TRANSFER_IN', externalRef: senderPhone },
+          });
+          const updatedSender = await tx.user.findUnique({ where: { id: req.user.id }, select: { walletBalance: true, fullName: true } });
+          return { newBalance: updatedSender.walletBalance, transactionId: senderTxn.id, recipientName: recipient.fullName, senderName: updatedSender.fullName };
         });
-        await tx.transaction.create({
-          data: { userId: recipient.id, amount, fee: 0, totalAmount: amount, status: 'SUCCESS', paymentMethod: 'TRANSFER_IN', externalRef: sender.phone },
-        });
-        const updatedSender = await tx.user.findUnique({ where: { id: sender.id }, select: { walletBalance: true } });
-        return { newBalance: updatedSender.walletBalance, transactionId: senderTxn.id, recipientName: recipient.fullName };
-      });
+      } catch (e) {
+        if (e.message === 'INSUFFICIENT_BALANCE') return apiResponse.error(res, 'الرصيد غير كافٍ', 400);
+        throw e;
+      }
 
-      await notifyUser(sender.id, '💸 تم التحويل', `تم تحويل ${amount} ج.م إلى ${recipient.fullName}`, 'NORMAL');
-      await notifyUser(recipient.id, '💰 تحويل وارد', `استلمت ${amount} ج.م من ${sender.fullName}${note ? ' — ' + note : ''}`, 'NORMAL');
+      await notifyUser(req.user.id, '💸 تم التحويل', `تم تحويل ${amount} ج.م إلى ${recipient.fullName}`, 'NORMAL');
+      await notifyUser(recipient.id, '💰 تحويل وارد', `استلمت ${amount} ج.م من ${result.senderName}${note ? ' — ' + note : ''}`, 'NORMAL');
 
-      return apiResponse.success(res, result, 'تم التحويل بنجاح', 201);
+      return apiResponse.success(res, { newBalance: result.newBalance, transactionId: result.transactionId, recipientName: result.recipientName }, 'تم التحويل بنجاح', 201);
     } catch (err) { next(err); }
   }
 );
@@ -299,14 +323,30 @@ router.post('/vouchers/redeem', [body('voucherId').notEmpty()], validate, async 
     const { voucherId } = req.body;
     const voucher = await prisma.voucher.findUnique({ where: { id: voucherId } });
     if (!voucher || !voucher.isActive) return apiResponse.error(res, 'القسيمة غير متاحة', 400);
-    if (voucher.usedCount >= voucher.maxUses) return apiResponse.error(res, 'القسيمة نفدت', 400);
-    const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { pointsBalance: true } });
-    if (user.pointsBalance < voucher.pointsCost) return apiResponse.error(res, 'نقاط غير كافية', 400);
-    await prisma.$transaction([
-      prisma.voucher.update({ where: { id: voucherId }, data: { usedCount: { increment: 1 } } }),
-      prisma.user.update({ where: { id: req.user.id }, data: { pointsBalance: { decrement: voucher.pointsCost } } }),
-      prisma.rewardTransaction.create({ data: { userId: req.user.id, points: -voucher.pointsCost, isEarned: false, reason: 'استبدال قسيمة', referenceId: voucherId } }),
-    ]);
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        // Atomic increment of usedCount, only if still under maxUses (prevents over-redemption race).
+        const vUpd = await tx.voucher.updateMany({
+          where: { id: voucherId, isActive: true, usedCount: { lt: voucher.maxUses } },
+          data: { usedCount: { increment: 1 } },
+        });
+        if (vUpd.count === 0) throw new Error('VOUCHER_DEPLETED');
+        // Atomic decrement of points, only if user still has enough.
+        const uUpd = await tx.user.updateMany({
+          where: { id: req.user.id, pointsBalance: { gte: voucher.pointsCost } },
+          data: { pointsBalance: { decrement: voucher.pointsCost } },
+        });
+        if (uUpd.count === 0) throw new Error('INSUFFICIENT_POINTS');
+        await tx.rewardTransaction.create({
+          data: { userId: req.user.id, points: -voucher.pointsCost, isEarned: false, reason: 'استبدال قسيمة', referenceId: voucherId },
+        });
+      });
+    } catch (e) {
+      if (e.message === 'VOUCHER_DEPLETED') return apiResponse.error(res, 'القسيمة نفدت', 400);
+      if (e.message === 'INSUFFICIENT_POINTS') return apiResponse.error(res, 'نقاط غير كافية', 400);
+      throw e;
+    }
     return apiResponse.success(res, { code: voucher.code, discountPercent: voucher.discountPercent });
   } catch (err) { next(err); }
 });

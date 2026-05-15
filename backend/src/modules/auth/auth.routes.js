@@ -6,7 +6,7 @@ const {
   jwtUtils, hashPassword, comparePassword, apiResponse,
   notifyUser, notifyAdmins, logger,
 } = require('../../utils/all');
-const { authLimiter, authenticateUser, validate } = require('../../middleware/index');
+const { authLimiter, authenticateUser, authenticateAdmin, validate } = require('../../middleware/index');
 
 const phoneRule = body('phone').trim().notEmpty().withMessage('رقم الهاتف مطلوب')
   .matches(/^[0-9+]{7,15}$/).withMessage('رقم الهاتف غير صحيح');
@@ -199,13 +199,11 @@ router.post('/admin/login', authLimiter,
 );
 
 // ─── ADMIN UPDATE DEVICE TOKEN ────────────────────────────────────────────────
-router.put('/admin/device-token', async (req, res, next) => {
+router.put('/admin/device-token', authenticateAdmin, async (req, res, next) => {
   try {
-    const h = req.headers.authorization;
-    if (!h?.startsWith('Bearer ')) return apiResponse.error(res, 'No token', 401);
-    const decoded = jwtUtils.verifyAdmin(h.split(' ')[1]);
     const { deviceToken } = req.body;
-    await prisma.admin.update({ where: { id: decoded.id }, data: { deviceToken } });
+    if (!deviceToken) return apiResponse.error(res, 'deviceToken required', 400);
+    await prisma.admin.update({ where: { id: req.admin.id }, data: { deviceToken } });
     return apiResponse.success(res, null, 'Device token updated');
   } catch (err) { next(err); }
 });

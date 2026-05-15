@@ -21,9 +21,15 @@ const app    = express();
 app.set('trust proxy', 1);
 const server = http.createServer(app);
 
+// Allowed origins for CORS. Default '*' so native mobile apps work (they don't send Origin),
+// but in production set CORS_ORIGINS to a comma-separated list of trusted web origins.
+const corsOriginsEnv = process.env.CORS_ORIGINS;
+const corsOrigin = corsOriginsEnv ? corsOriginsEnv.split(',').map(s => s.trim()) : '*';
+if (corsOrigin === '*') logger.warn('CORS_ORIGINS not set — allowing all origins. Set CORS_ORIGINS=https://your-domain.com for production.');
+
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET','POST'] },
+  cors: { origin: corsOrigin, methods: ['GET','POST'] },
   transports: ['websocket','polling'],
 });
 
@@ -60,7 +66,7 @@ io.on('connection', (socket) => {
 
 // ── Core Middleware ───────────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
-app.use(cors({ origin: '*', methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'] }));
+app.use(cors({ origin: corsOrigin, methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'] }));
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));

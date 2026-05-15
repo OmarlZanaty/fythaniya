@@ -50,7 +50,7 @@ class ApiClient {
           if (ok) {
             final tok = await _sec.read(key:AppConstants.tokenKey);
             err.requestOptions.headers['Authorization']='Bearer $tok';
-            try { final r=await _dio.fetch(err.requestOptions); return handler.resolve(r); } catch(_) {}
+            try { final r=await _dio.fetch(err.requestOptions); return handler.resolve(r); } catch (e) { debugPrint('[ApiClient] retry-after-refresh failed: $e'); }
           }
           await clearAll();
         }
@@ -69,7 +69,7 @@ class ApiClient {
       await _sec.write(key:AppConstants.tokenKey, value:d['accessToken'] as String);
       if (d['refreshToken']!=null) await _sec.write(key:AppConstants.refreshKey, value:d['refreshToken'] as String);
       return true;
-    } catch(_) { return false; }
+    } catch (e) { debugPrint('[ApiClient] refresh failed: $e'); return false; }
   }
 
   Future<Map<String,dynamic>> get(String path, {Map<String,dynamic>? params}) async {
@@ -123,7 +123,7 @@ class AuthRepo {
     _c.post('/auth/reset-password', body:{'phone':phone,'otp':otp,'newPassword':pw});
 
   Future<void> logout() async {
-    try { await _c.post('/auth/logout'); } catch(_) {}
+    try { await _c.post('/auth/logout'); } catch (e) { debugPrint('[AuthRepo] server logout failed (clearing local anyway): $e'); }
     await _c.clearAll();
   }
 
@@ -133,7 +133,11 @@ class AuthRepo {
     try {
       final res = await _c.get('/user/profile');
       return UserModel.fromJson(res['data'] as Map<String,dynamic>);
-    } catch(_) { return null; }
+    } on ApiException catch (e) {
+      // Only treat 401 as "not authenticated". Network/server errors should bubble so the caller can retry.
+      if (e.isUnauthorized) return null;
+      rethrow;
+    }
   }
 
   Future<void> updateDeviceToken(String token) =>

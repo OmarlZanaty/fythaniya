@@ -35,9 +35,10 @@ class AdminApiClient {
     if(kDebugMode)_dio.interceptors.add(LogInterceptor(requestBody:true,responseBody:true,logPrint:(o)=>debugPrint('[ADMIN API] $o')));
   }
 
-  Future<Map<String,dynamic>> get(String path,{Map<String,dynamic>? params})async{try{final r=await _dio.get(path,queryParameters:params);return r.data as Map<String,dynamic>;}on DioException catch(e){throw AdminApiException.fromDio(e);}}
-  Future<Map<String,dynamic>> post(String path,{Map<String,dynamic>? body})async{try{final r=await _dio.post(path,data:body);return r.data as Map<String,dynamic>;}on DioException catch(e){throw AdminApiException.fromDio(e);}}
-  Future<Map<String,dynamic>> put(String path,{Map<String,dynamic>? body})async{try{final r=await _dio.put(path,data:body);return r.data as Map<String,dynamic>;}on DioException catch(e){throw AdminApiException.fromDio(e);}}
+  Map<String,dynamic> _ensureMap(dynamic d){if(d is Map<String,dynamic>)return d;if(d is Map)return Map<String,dynamic>.from(d);throw const AdminApiException('Invalid server response',statusCode:0);}
+  Future<Map<String,dynamic>> get(String path,{Map<String,dynamic>? params})async{try{final r=await _dio.get(path,queryParameters:params);return _ensureMap(r.data);}on DioException catch(e){throw AdminApiException.fromDio(e);}}
+  Future<Map<String,dynamic>> post(String path,{Map<String,dynamic>? body})async{try{final r=await _dio.post(path,data:body);return _ensureMap(r.data);}on DioException catch(e){throw AdminApiException.fromDio(e);}}
+  Future<Map<String,dynamic>> put(String path,{Map<String,dynamic>? body})async{try{final r=await _dio.put(path,data:body);return _ensureMap(r.data);}on DioException catch(e){throw AdminApiException.fromDio(e);}}
   Future<void> saveToken(String t)=>_sec.write(key:AdminConstants.tokenKey,value:t);
   Future<String?> getToken()=>_sec.read(key:AdminConstants.tokenKey);
   Future<void> clearToken()=>_sec.delete(key:AdminConstants.tokenKey);
@@ -160,7 +161,7 @@ class AdminSocketService {
       final m=Map<String,dynamic>.from(d as Map);
       b2bApplication.value=m;
       AdminNotificationService.instance.show(
-        title: '🏢 طلب B2B جديد', body: m['companyName']?.toString() ?? 'طلب اعتماد حساب أعمال', payload: m['applicationId']?.toString(),
+        title: '🏢 طلب B2B جديد', body: m['companyName']?.toString() ?? 'طلب اعتماد حساب أعمال', payload: (m['accountId'] ?? m['applicationId'])?.toString(),
       );
     });
     _socket!.connect();

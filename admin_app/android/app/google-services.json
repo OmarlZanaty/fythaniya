@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1045189869600",
+    "project_id": "fe-thania",
+    "storage_bucket": "fe-thania.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1045189869600:android:15da62d0868df686157c45",
+        "android_client_info": {
+          "package_name": "com.almobarmg.fythaniya"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBSKxxDVDf2_H9q96jXjMXAuAnAbJDNonc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1045189869600:android:7e720093c912dccb157c45",
+        "android_client_info": {
+          "package_name": "com.fythaniya.fythaniya_admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBSKxxDVDf2_H9q96jXjMXAuAnAbJDNonc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

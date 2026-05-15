@@ -37,7 +37,20 @@ class AuthBloc extends Bloc<AuthEvent,AuthState> {
     on<AuthLogoutEvent>  (_logout);
     on<AuthUpdateUserEvent>(_updateUser);
   }
-  Future<void> _check(AuthCheckEvent e, Emitter<AuthState> emit) async { emit(AuthLoading()); try { final u=await _repo.getMe(); emit(u!=null?AuthAuthenticated(u):AuthUnauthenticated()); } catch(_) { emit(AuthUnauthenticated()); } }
+  Future<void> _check(AuthCheckEvent e, Emitter<AuthState> emit) async {
+    emit(AuthLoading());
+    try {
+      final u = await _repo.getMe();
+      emit(u != null ? AuthAuthenticated(u) : AuthUnauthenticated());
+    } on ApiException catch (ex) {
+      // 401 → really unauthenticated. Other errors (network, server) → surface so the splash screen can retry.
+      if (ex.isUnauthorized) { emit(AuthUnauthenticated()); }
+      else { emit(AuthError(ex.message)); }
+    } catch (ex, st) {
+      print('[AuthBloc.check] $ex\n$st');
+      emit(AuthError('تعذر التحقق من الجلسة'));
+    }
+  }
   Future<void> _login(AuthLoginEvent e, Emitter<AuthState> emit) async { emit(AuthLoading()); try { final r=await _repo.login(e.phone,e.pass); emit(AuthAuthenticated(r.user)); } on ApiException catch(ex) { emit(AuthError(ex.message)); } }
   Future<void> _register(AuthRegisterEvent e, Emitter<AuthState> emit) async { emit(AuthLoading()); try { final r=await _repo.register(e.phone,e.name,e.pass); emit(AuthAuthenticated(r.user)); } on ApiException catch(ex) { emit(AuthError(ex.message)); } }
   Future<void> _forgot(AuthForgotEvent e, Emitter<AuthState> emit) async { emit(AuthLoading()); try { await _repo.forgotPassword(e.phone); emit(AuthOtpSent(e.phone)); } on ApiException catch(ex) { emit(AuthError(ex.message)); } }
@@ -90,7 +103,18 @@ class TxBloc extends Bloc<TxEvent,TxState> {
   TxBloc():super(TxInitial()) { on<TxLoadEvent>(_load); on<TxFilterEvent>(_filterEvt); on<TxMoreEvent>(_more); }
   Future<void> _load(TxLoadEvent e, Emitter<TxState> emit) async { emit(TxLoading()); _page=1; _filter=e.status; try { final r=await UserRepo().getTransactions(page:1,status:_filter); emit(TxLoaded(items:r.data,hasMore:r.hasNext,filter:_filter)); } on ApiException catch(ex) { emit(TxError(ex.message)); } }
   Future<void> _filterEvt(TxFilterEvent e, Emitter<TxState> emit) async { _filter=e.status; add(TxLoadEvent(status:_filter)); }
-  Future<void> _more(TxMoreEvent e, Emitter<TxState> emit) async { final c=state; if(c is! TxLoaded||!c.hasMore)return; _page++; try { final r=await UserRepo().getTransactions(page:_page,status:_filter); emit(TxLoaded(items:[...c.items,...r.data],hasMore:r.hasNext,filter:_filter)); } catch(_) {} }
+  Future<void> _more(TxMoreEvent e, Emitter<TxState> emit) async {
+    final c = state;
+    if (c is! TxLoaded || !c.hasMore) return;
+    _page++;
+    try {
+      final r = await UserRepo().getTransactions(page: _page, status: _filter);
+      emit(TxLoaded(items: [...c.items, ...r.data], hasMore: r.hasNext, filter: _filter));
+    } catch (ex, st) {
+      print('[TxBloc.more] $ex\n$st');
+      _page--; // roll back page so user can retry by scrolling again
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════════

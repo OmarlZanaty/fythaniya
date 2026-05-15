@@ -1,0 +1,28 @@
+# Claude Code workspace
+.claude/
+
+# Firebase service account private keys (NEVER commit these)
+**/firebase-admin*.json
+**/*-firebase-adminsdk*.json
+!**/google-services.json
+
+# Environment files
+.env
+.env.local
+.env.production
+!.env.example
+
+# Node
+node_modules/
+
+# Build outputs
+**/build/
+**/dist/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

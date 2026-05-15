@@ -182,7 +182,10 @@ router.post('/group-payment', authenticateUser,
       if (!account || account.payLaterStatus !== 'ACTIVE') return apiResponse.error(res, 'حساب B2B غير مفعّل', 403);
 
       const { memberIds, amounts, dueDate } = req.body;
+      if (memberIds.length !== amounts.length) return apiResponse.error(res, 'عدد الأعضاء يجب أن يطابق عدد المبالغ', 400);
+      if (amounts.some(a => Number(a) <= 0 || !isFinite(Number(a)))) return apiResponse.error(res, 'مبلغ غير صحيح', 400);
       const totalAmount = amounts.reduce((s, a) => s + Number(a), 0);
+      if (totalAmount > 250000) return apiResponse.error(res, 'إجمالي المبلغ يتجاوز الحد المسموح', 400);
 
       const group = await prisma.$transaction(async (tx) => {
         const gp = await tx.groupPayment.create({

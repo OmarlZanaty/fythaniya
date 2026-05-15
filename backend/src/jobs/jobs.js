@@ -4,14 +4,31 @@ const prisma = require('../config/database');
 const { logger, notifyUser, notifyAdmins, sendPush } = require('../utils/all');
 
 // ─── JOB 1: SLA Escalation (every 2 min) ─────────────────────────────────────
+let _systemAdminIdCache = null;
+async function getSystemAdminId() {
+  if (_systemAdminIdCache) return _systemAdminIdCache;
+  const admin = await prisma.admin.findFirst({
+    where: { isActive: true, role: 'SUPER_ADMIN' },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  _systemAdminIdCache = admin?.id ?? null;
+  return _systemAdminIdCache;
+}
+
 async function runSLACheck(io) {
   try {
     const overdue = await prisma.request.findMany({
       where: { status: { in: ['PENDING','ASSIGNED','IN_PROGRESS'] }, slaDeadline: { lt: new Date() } },
-      include: { user: true },
+      include: { user: { select: { id: true, phone: true, fullName: true } } },
     });
     if (!overdue.length) return;
     logger.warn(`[SLA] ${overdue.length} requests breached SLA`);
+
+    const systemAdminId = await getSystemAdminId();
+    if (!systemAdminId) {
+      logger.warn('[SLA] No active SUPER_ADMIN found — skipping escalation row creation, emitting socket only');
+    }
 
     for (const r of overdue) {
       // Check if already escalated recently (last 10 min)
@@ -22,9 +39,11 @@ async function runSLACheck(io) {
 
       const level = r.type === 'B2B_PAY_LATER' ? 'LEVEL_1' : 'LEVEL_2';
 
-      await prisma.escalation.create({
-        data: { requestId: r.id, level, reason: 'SLA breach - auto escalation', escalatedBy: 'system' },
-      });
+      if (systemAdminId) {
+        await prisma.escalation.create({
+          data: { requestId: r.id, level, reason: 'SLA breach - auto escalation', escalatedBy: systemAdminId },
+        });
+      }
 
       await notifyAdmins(
         `⚠️ تجاوز SLA — ${level}`,
@@ -44,7 +63,7 @@ async function runB2BOverdueCheck() {
     const now = new Date();
     const overdue = await prisma.b2BPayLater.findMany({
       where: { status: 'ACTIVE', dueDate: { lt: now } },
-      include: { b2bAccount: { include: { user: true } } },
+      include: { b2bAccount: { include: { user: { select: { id: true, phone: true, fullName: true, deviceToken: true } } } } },
     });
     if (!overdue.length) return;
     logger.info(`[B2B OVERDUE] ${overdue.length} invoices overdue`);
@@ -75,7 +94,7 @@ async function runBillReminders() {
     const tomorrow = new Date(Date.now() + 86400000);
     const reminders = await prisma.billReminder.findMany({
       where: { isActive: true, dueDate: { gte: new Date(), lte: tomorrow } },
-      include: { user: true },
+      include: { user: { select: { id: true, phone: true, fullName: true, deviceToken: true } } },
     });
     if (!reminders.length) return;
     logger.info(`[BILL REMINDERS] ${reminders.length} reminders to send`);

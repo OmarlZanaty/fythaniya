@@ -85,14 +85,14 @@ router.get('/requests/:id', async (req, res, next) => {
     const r = await prisma.request.findUnique({
       where: { id: req.params.id },
       include: {
-        user: true,
+        user: { select: { id: true, phone: true, fullName: true, email: true, type: true, status: true, kycVerified: true, pointsBalance: true, walletBalance: true } },
         serviceProvider: true,
         subService: true,
         processor: { select: { id: true, fullName: true, email: true } },
         transactions: true,
         escalations: true,
         auditLogs: { orderBy: { createdAt: 'asc' } },
-        b2bPayLater: { include: { b2bAccount: true } },
+        b2bPayLater: { include: { b2bAccount: { include: { user: { select: { id: true, phone: true, fullName: true } } } } } },
       },
     });
     if (!r) return apiResponse.error(res, 'Not found', 404);
@@ -100,23 +100,21 @@ router.get('/requests/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Assign to self
+// Assign to self (optimistic-lock: only succeeds if request is still PENDING/ASSIGNED)
 router.put('/requests/:id/assign', async (req, res, next) => {
   try {
-    const r = await prisma.request.findUnique({ where: { id: req.params.id } });
-    if (!r) return apiResponse.error(res, 'Not found', 404);
-    if (!['PENDING','ASSIGNED'].includes(r.status)) return apiResponse.error(res, 'Cannot assign', 400);
-
-    const updated = await prisma.request.update({
-      where: { id: r.id },
+    const upd = await prisma.request.updateMany({
+      where: { id: req.params.id, status: { in: ['PENDING','ASSIGNED'] } },
       data: { status: 'ASSIGNED', processorId: req.admin.id },
     });
+    if (upd.count === 0) return apiResponse.error(res, 'الطلب غير متاح للتعيين (تم التعيين من قِبل مسؤول آخر أو تغيرت حالته)', 409);
+    const r = await prisma.request.findUnique({ where: { id: req.params.id } });
     const io = req.app.get('io');
     emitToAdmins(io, 'request_updated', { requestId: r.id, status: 'ASSIGNED', processorId: req.admin.id });
     emitToUser(io, r.userId, 'request_updated', { requestId: r.id, status: 'ASSIGNED' });
     await notifyUser(r.userId, '👤 تم استلام طلبك', 'تم تعيين موظف لمعالجة طلبك', 'NORMAL', { requestId: r.id, status: 'ASSIGNED' });
     await prisma.auditLog.create({ data: { adminId: req.admin.id, requestId: r.id, action: 'ASSIGN', entity: 'request', entityId: r.id } });
-    return apiResponse.success(res, updated, 'تم التعيين');
+    return apiResponse.success(res, r, 'تم التعيين');
   } catch (err) { next(err); }
 });
 
@@ -140,7 +138,13 @@ router.put('/requests/:id/complete', requireRole('TRANSACTION_PROCESSOR','B2B_MA
   async (req, res, next) => {
     try {
       const { externalRef, adminNote } = req.body;
-      const r = await prisma.request.findUnique({ where: { id: req.params.id }, include: { user: true } });
+      const r = await prisma.request.findUnique({
+        where: { id: req.params.id },
+        include: {
+          user: { select: { id: true, phone: true, fullName: true, deviceToken: true } },
+          serviceProvider: { select: { id: true, category: true } },
+        },
+      });
       if (!r) return apiResponse.error(res, 'Not found', 404);
       if (['COMPLETED','FAILED','REFUNDED'].includes(r.status)) return apiResponse.error(res, 'Already finalized', 400);
 
@@ -164,17 +168,14 @@ router.put('/requests/:id/complete', requireRole('TRANSACTION_PROCESSOR','B2B_MA
           await tx.user.update({ where: { id: r.userId }, data: { pointsBalance: { increment: pts } } });
           await tx.rewardTransaction.create({ data: { userId: r.userId, points: pts, isEarned: true, reason: 'مكافأة معاملة', referenceId: r.id } });
         }
-        // Spending record
-        if (r.serviceProviderId) {
-          const provider = await tx.serviceProvider.findUnique({ where: { id: r.serviceProviderId } });
-          if (provider) {
-            const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
-            await tx.spendingRecord.upsert({
-              where: { userId_category_month_year: { userId: r.userId, category: provider.category, month: monthKey, year: new Date().getFullYear() } },
-              update: { amount: { increment: Number(r.amount) }, count: { increment: 1 } },
-              create: { userId: r.userId, category: provider.category, month: monthKey, year: new Date().getFullYear(), amount: r.amount, count: 1 },
-            });
-          }
+        // Spending record — provider already loaded above, no need to re-query
+        if (r.serviceProvider) {
+          const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+          await tx.spendingRecord.upsert({
+            where: { userId_category_month_year: { userId: r.userId, category: r.serviceProvider.category, month: monthKey, year: new Date().getFullYear() } },
+            update: { amount: { increment: Number(r.amount) }, count: { increment: 1 } },
+            create: { userId: r.userId, category: r.serviceProvider.category, month: monthKey, year: new Date().getFullYear(), amount: r.amount, count: 1 },
+          });
         }
       });
 
@@ -238,6 +239,8 @@ router.put('/requests/:id/refund', requireRole('SUPER_ADMIN','B2B_MANAGER'),
       const { reason } = req.body;
       const r = await prisma.request.findUnique({ where: { id: req.params.id } });
       if (!r) return apiResponse.error(res, 'Not found', 404);
+      if (r.status === 'REFUNDED') return apiResponse.error(res, 'تم استرداد هذا الطلب بالفعل', 409);
+      if (!['COMPLETED','FAILED'].includes(r.status)) return apiResponse.error(res, 'لا يمكن استرداد طلب لم يُنفذ بعد', 400);
       await prisma.request.update({ where: { id: r.id }, data: { status: 'REFUNDED', adminNote: reason || 'Refunded by admin' } });
       await notifyUser(r.userId, '💰 تم استرداد مبلغك', `تم استرداد ${r.totalAmount} ج.م إلى حسابك`, 'HIGH');
       await prisma.auditLog.create({ data: { adminId: req.admin.id, requestId: r.id, action: 'REFUND', entity: 'request', entityId: r.id } });
@@ -260,7 +263,7 @@ router.put('/requests/:id/escalate', async (req, res, next) => {
 });
 
 // Add admin note
-router.put('/requests/:id/note', async (req, res, next) => {
+router.put('/requests/:id/note', requireRole('TRANSACTION_PROCESSOR','B2B_MANAGER','SUPER_ADMIN'), async (req, res, next) => {
   try {
     const { note } = req.body;
     if (!note) return apiResponse.error(res, 'Note required', 400);
@@ -298,7 +301,10 @@ router.get('/users/:id', async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
-      include: {
+      select: {
+        id: true, phone: true, fullName: true, email: true, nationalId: true,
+        type: true, status: true, kycVerified: true, kycVerifiedAt: true,
+        pointsBalance: true, walletBalance: true, createdAt: true, lastLoginAt: true,
         b2bAccount: true,
         userNotifications: { take: 10, orderBy: { createdAt: 'desc' } },
       },
@@ -316,6 +322,8 @@ router.put('/users/:id/status', requireRole('SUPER_ADMIN'),
   [body('status').isIn(['ACTIVE','SUSPENDED','BANNED'])], validate,
   async (req, res, next) => {
     try {
+      const exists = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true } });
+      if (!exists) return apiResponse.error(res, 'User not found', 404);
       await prisma.user.update({ where: { id: req.params.id }, data: { status: req.body.status } });
       await prisma.auditLog.create({ data: { adminId: req.admin.id, userId: req.params.id, action: 'UPDATE_STATUS', entity: 'user', entityId: req.params.id, details: req.body.status } });
       return apiResponse.success(res, null, 'تم تحديث حالة المستخدم');

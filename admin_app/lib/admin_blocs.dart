@@ -63,7 +63,14 @@ class ReqBloc extends Bloc<ReqEvent,ReqState> {
   final _repo=AdminRequestsRepo(); int _page=1; String? _status,_type,_search;
   ReqBloc():super(ReqInitial()){on<ReqLoadEvent>(_load);on<ReqMoreEvent>(_more);on<ReqRefreshEvent>((e,em)=>_load(ReqLoadEvent(status:_status,type:_type,search:_search),em));on<ReqNewEvent>(_new);on<ReqUpdatedEvent>(_updated);on<ReqAssignEvent>(_assign);on<ReqCompleteEvent>(_complete);on<ReqFailEvent>(_fail);on<ReqRefundEvent>(_refund);on<ReqEscalateEvent>(_escalate);}
   Future<void> _load(ReqLoadEvent e,Emitter<ReqState> emit)async{emit(ReqLoading());_page=1;_status=e.status;_type=e.type;_search=e.search;try{final r=await _repo.getRequests(page:1,status:_status,type:_type,search:_search);emit(ReqLoaded(items:r.data,hasMore:r.hasNext,status:_status,type:_type));}on AdminApiException catch(ex){emit(ReqError(ex.message));}}
-  Future<void> _more(ReqMoreEvent e,Emitter<ReqState> emit)async{final c=state;if(c is!ReqLoaded||!c.hasMore)return;_page++;try{final r=await _repo.getRequests(page:_page,status:_status,type:_type);emit(ReqLoaded(items:[...c.items,...r.data],hasMore:r.hasNext,status:_status,type:_type));}catch(_){}}
+  Future<void> _more(ReqMoreEvent e,Emitter<ReqState> emit)async{
+    final c=state; if(c is!ReqLoaded||!c.hasMore)return;
+    _page++;
+    try{
+      final r=await _repo.getRequests(page:_page,status:_status,type:_type);
+      emit(ReqLoaded(items:[...c.items,...r.data],hasMore:r.hasNext,status:_status,type:_type));
+    } catch(ex,st){ print('[ReqBloc.more] $ex\n$st'); _page--; }
+  }
   Future<void> _new(ReqNewEvent e,Emitter<ReqState> emit)async{final c=state;if(c is ReqLoaded)emit(ReqLoaded(items:[e.req,...c.items],hasMore:c.hasMore,status:c.status,type:c.type));}
   Future<void> _updated(ReqUpdatedEvent e,Emitter<ReqState> emit)async{final c=state;if(c is!ReqLoaded)return;final items=c.items.map((r)=>r.id==e.id?RequestItem.fromJson({...{'id':r.id,'type':r.type,'status':e.status,'amount':r.amount,'fee':r.fee,'totalAmount':r.totalAmount,'createdAt':r.createdAt.toIso8601String()}}):r).toList();emit(ReqLoaded(items:items,hasMore:c.hasMore,status:c.status,type:c.type));}
   Future<void> _action(String id,Future<void> Function() action,Emitter<ReqState> emit)async{final c=state;if(c is ReqLoaded)emit(ReqProcessing(c.items));try{await action();add(ReqRefreshEvent());}on AdminApiException catch(ex){emit(ReqError(ex.message));}}
@@ -118,7 +125,7 @@ class AdminNotifError   extends AdminNotifState { final String msg; const AdminN
 class AdminNotifBloc extends Bloc<AdminNotifEvent,AdminNotifState> {
   final _repo=AdminNotifsRepo();
   AdminNotifBloc():super(AdminNotifInitial()){on<AdminNotifLoadEvent>(_load);on<AdminNotifMarkAllEvent>(_mark);}
-  Future<void> _load(AdminNotifLoadEvent e,Emitter<AdminNotifState> emit)async{emit(AdminNotifLoading());try{final res=await _repo.getNotifications();final items=(res['data'] as List<dynamic>).map((n)=>AdminNotification.fromJson(n as Map<String,dynamic>)).toList();final unread=res['unreadCount'] as int??items.where((n)=>!n.isRead).length;emit(AdminNotifLoaded(items:items,unread:unread));}on AdminApiException catch(ex){emit(AdminNotifError(ex.message));}}
+  Future<void> _load(AdminNotifLoadEvent e,Emitter<AdminNotifState> emit)async{emit(AdminNotifLoading());try{final res=await _repo.getNotifications();final items=(res['data'] as List<dynamic>).map((n)=>AdminNotification.fromJson(n as Map<String,dynamic>)).toList();final unread=(res['unreadCount'] as int?)??items.where((n)=>!n.isRead).length;emit(AdminNotifLoaded(items:items,unread:unread));}on AdminApiException catch(ex){emit(AdminNotifError(ex.message));}}
   Future<void> _mark(AdminNotifMarkAllEvent e,Emitter<AdminNotifState> emit)async{await _repo.markAllRead();add(AdminNotifLoadEvent());}
 }
 

@@ -49,9 +49,9 @@ class _ProfileState extends State<ProfileScreen> {
         if(user.isB2B)_Item(icon:Icons.business_rounded,label:S.b2bTitle,onTap:()=>ctx.push(AppRoutes.b2bDash),color:AppColors.b2b),
         if(!user.isB2B)_Item(icon:Icons.business_rounded,label:'التقديم على حساب B2B',onTap:()=>ctx.push(AppRoutes.b2bApply),color:AppColors.b2b),
         const SizedBox(height:D.md),const _Label('الدعم والمعلومات'),
-        _Item(icon:Icons.support_agent_rounded,label:S.support,onTap:(){}),
-        _Item(icon:Icons.description_outlined,label:S.terms,onTap:(){}),
-        _Item(icon:Icons.privacy_tip_outlined,label:S.privacy,onTap:(){}),
+        _Item(icon:Icons.support_agent_rounded,label:S.support,onTap:()=>_showInfoSheet(ctx, S.support, 'تواصل معنا: support@fythaniya.com\nالهاتف: 19999')),
+        _Item(icon:Icons.description_outlined,label:S.terms,onTap:()=>_showInfoSheet(ctx, S.terms, 'تطبق الشروط والأحكام الموضحة في الموقع الإلكتروني. باستخدامك للتطبيق فإنك توافق على هذه الشروط.')),
+        _Item(icon:Icons.privacy_tip_outlined,label:S.privacy,onTap:()=>_showInfoSheet(ctx, S.privacy, 'نحن نحترم خصوصيتك. يتم تشفير بياناتك ولا يتم مشاركتها مع أي طرف ثالث بدون موافقتك.')),
         const _Item(icon:Icons.info_outline_rounded,label:S.appVersion,trailing:Text('2.0.0',style:TS.cap),onTap:null),
         const SizedBox(height:D.md),
         AppCard(color:AppColors.errorBg,child:ListTile(
@@ -137,4 +137,21 @@ class _ChangePassState extends State<ChangePasswordScreen> {
         const SizedBox(height:D.xl),
         AppButton(label:S.save,isLoading:s is ProfileSaving,onPressed:(){if(_form.currentState!.validate())ctx.read<ProfileBloc>().add(ProfileChangePassEvent(_cur.text,_nw.text));})
       ])))));
+}
+
+void _showInfoSheet(BuildContext ctx, String title, String body) {
+  showModalBottomSheet(
+    context: ctx,
+    isScrollControlled: true,
+    builder: (_) => Padding(
+      padding: EdgeInsets.only(left: D.lg, right: D.lg, top: D.lg, bottom: MediaQuery.of(ctx).viewInsets.bottom + D.lg),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: TS.h3),
+        const SizedBox(height: D.md),
+        Text(body, style: TS.body, textAlign: TextAlign.right),
+        const SizedBox(height: D.lg),
+        AppButton(label: S.done, onPressed: () => Navigator.pop(ctx)),
+      ]),
+    ),
+  );
 }

@@ -165,10 +165,18 @@ class _LoginState extends State<LoginScreen> {
 // ════════════════════════════════════════════════════════
 class DashboardScreen extends StatefulWidget { const DashboardScreen({super.key}); @override State<DashboardScreen> createState()=>_DashState(); }
 class _DashState extends State<DashboardScreen> {
+  late final VoidCallback _newReqListener; late final VoidCallback _slaListener;
   @override void initState(){super.initState();context.read<DashBloc>().add(DashLoadEvent());_listenSocket();}
   void _listenSocket(){
-    AdminSocketService.instance.newRequest.addListener((){final r=AdminSocketService.instance.newRequest.value;if(r!=null&&mounted){setState((){});context.read<DashBloc>().add(DashLoadEvent());}});
-    AdminSocketService.instance.slaBreach.addListener((){if(mounted){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('⚠️ تجاوز SLA — تدخل فوري مطلوب'),backgroundColor:AC.error));}});
+    _newReqListener = (){final r=AdminSocketService.instance.newRequest.value;if(r!=null&&mounted){setState((){});context.read<DashBloc>().add(DashLoadEvent());}};
+    _slaListener = (){if(mounted){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('⚠️ تجاوز SLA — تدخل فوري مطلوب'),backgroundColor:AC.error));}};
+    AdminSocketService.instance.newRequest.addListener(_newReqListener);
+    AdminSocketService.instance.slaBreach.addListener(_slaListener);
+  }
+  @override void dispose(){
+    AdminSocketService.instance.newRequest.removeListener(_newReqListener);
+    AdminSocketService.instance.slaBreach.removeListener(_slaListener);
+    super.dispose();
   }
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
     appBar:AppBar(title:const Text('لوحة التحكم'),backgroundColor:AC.primary,actions:[
@@ -256,9 +264,17 @@ class RequestsScreen extends StatefulWidget { const RequestsScreen({super.key});
 class _ReqScreenState extends State<RequestsScreen> {
   String? _status,_type;
   final _search=TextEditingController();
+  late final VoidCallback _newReqListener;
   @override void initState(){super.initState();context.read<ReqBloc>().add(ReqLoadEvent());_initSocket();}
-  @override void dispose(){_search.dispose();super.dispose();}
-  void _initSocket(){AdminSocketService.instance.newRequest.addListener((){final r=AdminSocketService.instance.newRequest.value;if(r!=null&&mounted)context.read<ReqBloc>().add(ReqNewEvent(r));});}
+  @override void dispose(){
+    AdminSocketService.instance.newRequest.removeListener(_newReqListener);
+    _search.dispose();
+    super.dispose();
+  }
+  void _initSocket(){
+    _newReqListener = (){final r=AdminSocketService.instance.newRequest.value;if(r!=null&&mounted)context.read<ReqBloc>().add(ReqNewEvent(r));};
+    AdminSocketService.instance.newRequest.addListener(_newReqListener);
+  }
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
     appBar:AppBar(title:const Text('طابور الطلبات'),backgroundColor:AC.primary,actions:[IconButton(icon:const Icon(Icons.refresh_rounded),onPressed:()=>ctx.read<ReqBloc>().add(ReqRefreshEvent()))]),
     drawer:const AdminDrawer(),
@@ -316,7 +332,17 @@ class _ReqDetailState extends State<RequestDetailScreen> {
   @override void initState(){super.initState();_load();}
   @override void dispose(){_ref.dispose();_reason.dispose();_note.dispose();super.dispose();}
 
-  Future<void> _load()async{try{final r=await AdminRequestsRepo().getRequest(widget.id);setState((){_req=r;_loading=false;});}catch(e){setState((){_loading=false;});}}
+  Future<void> _load()async{
+    try{
+      final r=await AdminRequestsRepo().getRequest(widget.id);
+      if(!mounted)return;
+      setState((){_req=r;_loading=false;});
+    } catch(e){
+      print('[ReqDetail._load] $e');
+      if(!mounted)return;
+      setState((){_loading=false;});
+    }
+  }
 
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
     appBar:AppBar(title:Text('طلب #${widget.id.substring(0,8)}'),backgroundColor:AC.primary,leading:IconButton(icon:const Icon(Icons.arrow_back_ios_new_rounded),onPressed:()=>ctx.pop()),
@@ -416,7 +442,7 @@ class _B2BApplicationsList extends StatelessWidget {
             TextField(controller:_limit,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الحد الائتماني (ج.م)',border:OutlineInputBorder(),isDense:true,contentPadding:EdgeInsets.symmetric(horizontal:12,vertical:10))),
             const SizedBox(height:AD.sm),
             Row(children:[
-              Expanded(child:ElevatedButton.icon(onPressed:(){if(_limit.text.isEmpty)return;showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('تأكيد الموافقة'),content:Text('الحد الائتماني: ${_limit.text} ج.م'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){Navigator.pop(ctx);ctx.read<AdminB2BBloc>().add(AdminB2BApproveEvent(a.id,double.parse(_limit.text)));},child:const Text('موافقة'))]));},icon:const Icon(Icons.check_rounded,size:18),label:const Text('موافقة'),style:ElevatedButton.styleFrom(backgroundColor:AC.success,minimumSize:const Size(0,36)))),
+              Expanded(child:ElevatedButton.icon(onPressed:(){final lim=double.tryParse(_limit.text.trim());if(lim==null||lim<=0){ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content:Text('أدخل حد ائتماني صحيح')));return;}showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('تأكيد الموافقة'),content:Text('الحد الائتماني: $lim ج.م'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){Navigator.pop(ctx);ctx.read<AdminB2BBloc>().add(AdminB2BApproveEvent(a.id,lim));},child:const Text('موافقة'))]));},icon:const Icon(Icons.check_rounded,size:18),label:const Text('موافقة'),style:ElevatedButton.styleFrom(backgroundColor:AC.success,minimumSize:const Size(0,36)))),
               const SizedBox(width:8),
               Expanded(child:ElevatedButton.icon(onPressed:(){showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('رفض الطلب'),content:TextField(controller:_reason,decoration:const InputDecoration(labelText:'سبب الرفض')),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){if(_reason.text.isEmpty)return;Navigator.pop(ctx);ctx.read<AdminB2BBloc>().add(AdminB2BRejectEvent(a.id,_reason.text));},child:Text('رفض',style:TextStyle(color:AC.error)))]));}  ,icon:const Icon(Icons.close_rounded,size:18),label:const Text('رفض'),style:ElevatedButton.styleFrom(backgroundColor:AC.error,minimumSize:const Size(0,36)))),
             ]),
@@ -456,7 +482,17 @@ class _B2BDetailState extends State<B2BDetailScreen> {
   final _newLimit=TextEditingController();
   @override void initState(){super.initState();_load();}
   @override void dispose(){_newLimit.dispose();super.dispose();}
-  Future<void> _load()async{try{final a=await AdminB2BRepo().getAccount(widget.id);setState((){_acc=a;_loading=false;});}catch(_){setState((){_loading=false;});}}
+  Future<void> _load()async{
+    try{
+      final a=await AdminB2BRepo().getAccount(widget.id);
+      if(!mounted)return;
+      setState((){_acc=a;_loading=false;});
+    } catch(e){
+      print('[B2BDetail._load] $e');
+      if(!mounted)return;
+      setState((){_loading=false;});
+    }
+  }
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
     appBar:AppBar(title:Text(_acc?.companyName??'B2B Detail'),backgroundColor:AC.primary,leading:IconButton(icon:const Icon(Icons.arrow_back_ios_new_rounded),onPressed:()=>ctx.pop())),
     body:_loading?const Center(child:CircularProgressIndicator(color:AC.primary)):_acc==null?const Center(child:Text('حدث خطأ')):
@@ -479,7 +515,7 @@ class _B2BDetailState extends State<B2BDetailScreen> {
           Text('تحديث الحد الائتماني',style:AT.h3),const SizedBox(height:AD.sm),
           TextField(controller:_newLimit,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الحد الجديد (ج.م)',border:OutlineInputBorder())),
           const SizedBox(height:AD.sm),
-          SizedBox(width:double.infinity,height:AD.btnH,child:ElevatedButton(onPressed:(){if(_newLimit.text.isEmpty)return;ctx.read<AdminB2BBloc>().add(AdminB2BUpdateLimitEvent(_acc!.id,double.parse(_newLimit.text)));},child:const Text('تحديث',style:AT.btn))),
+          SizedBox(width:double.infinity,height:AD.btnH,child:ElevatedButton(onPressed:(){final lim=double.tryParse(_newLimit.text.trim());if(lim==null||lim<=0){ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content:Text('أدخل حد ائتماني صحيح')));return;}ctx.read<AdminB2BBloc>().add(AdminB2BUpdateLimitEvent(_acc!.id,lim));},child:const Text('تحديث',style:AT.btn))),
         ])),
         const SizedBox(height:AD.sm),
         SizedBox(width:double.infinity,height:AD.btnH,child:ElevatedButton.icon(onPressed:()=>ctx.read<AdminB2BBloc>().add(AdminB2BSuspendEvent(_acc!.id)),icon:const Icon(Icons.block_rounded,size:18),label:const Text('تعليق الحساب',style:AT.btn),style:ElevatedButton.styleFrom(backgroundColor:AC.error))),
@@ -517,17 +553,27 @@ class _ServicesState extends State<ServicesScreen> {
 
   void _showAddProvider(BuildContext ctx){
     final _name=TextEditingController(); final _display=TextEditingController(); String _cat='TELECOM';
-    showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('إضافة مزود خدمة'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:_name,decoration:const InputDecoration(labelText:'الاسم الداخلي')),TextField(controller:_display,decoration:const InputDecoration(labelText:'الاسم المعروض')),DropdownButtonFormField<String>(value:_cat,items:['TELECOM','ELECTRICITY','GAS','WATER','INTERNET','INSURANCE','GOVERNMENT'].map((c)=>DropdownMenuItem(value:c,child:Text(c))).toList(),onChanged:(v)=>_cat=v!,decoration:const InputDecoration(labelText:'الفئة'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){Navigator.pop(ctx);ctx.read<AdminServicesBloc>().add;/* create provider */},child:const Text('إضافة'))]));
+    showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('إضافة مزود خدمة'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:_name,decoration:const InputDecoration(labelText:'الاسم الداخلي')),TextField(controller:_display,decoration:const InputDecoration(labelText:'الاسم المعروض')),DropdownButtonFormField<String>(value:_cat,items:['TELECOM','ELECTRICITY','GAS','WATER','INTERNET','INSURANCE','GOVERNMENT'].map((c)=>DropdownMenuItem(value:c,child:Text(c))).toList(),onChanged:(v)=>_cat=v!,decoration:const InputDecoration(labelText:'الفئة'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:() async {
+      final name=_name.text.trim(); final display=_display.text.trim();
+      if(name.isEmpty||display.isEmpty){ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content:Text('الاسم والاسم المعروض مطلوبان')));return;}
+      Navigator.pop(ctx);
+      try {
+        await AdminServicesRepo().createProvider({'name':name,'displayName':display,'category':_cat,'isActive':true});
+        if(ctx.mounted) ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+      } on AdminApiException catch(e) {
+        if(ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text(e.message),backgroundColor:AC.error));
+      }
+    },child:const Text('إضافة'))])).then((_){_name.dispose();_display.dispose();});
   }
 
   void _showEditSub(BuildContext ctx,SubService sub){
     final _fixed=TextEditingController(text:sub.fixedFee.toString()); final _pct=TextEditingController(text:(sub.percentageFee*100).toString());
-    showDialog(context:ctx,builder:(_)=>AlertDialog(title:Text('تعديل ${sub.nameAr}'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:_fixed,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الرسوم الثابتة (ج.م)')),TextField(controller:_pct,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'النسبة المئوية (%)'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){Navigator.pop(ctx);final fixed=double.tryParse(_fixed.text)??sub.fixedFee;final pct=(double.tryParse(_pct.text)??sub.percentageFee*100)/100;ctx.read<AdminServicesBloc>().add(AdminServicesUpdateFeeEvent(sub.id,fixed,pct));},child:const Text('حفظ'))]));
+    showDialog(context:ctx,builder:(_)=>AlertDialog(title:Text('تعديل ${sub.nameAr}'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:_fixed,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الرسوم الثابتة (ج.م)')),TextField(controller:_pct,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'النسبة المئوية (%)'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){Navigator.pop(ctx);final fixed=double.tryParse(_fixed.text)??sub.fixedFee;final pct=(double.tryParse(_pct.text)??sub.percentageFee*100)/100;ctx.read<AdminServicesBloc>().add(AdminServicesUpdateFeeEvent(sub.id,fixed,pct));},child:const Text('حفظ'))])).then((_){_fixed.dispose();_pct.dispose();});
   }
 
   void _showAddSub(BuildContext ctx,String providerId){
     final _name=TextEditingController(); final _nameAr=TextEditingController(); final _fixed=TextEditingController(text:'1.5'); final _pct=TextEditingController(text:'0'); String _cat='TELECOM';
-    showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('إضافة خدمة فرعية'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:_name,decoration:const InputDecoration(labelText:'الاسم بالإنجليزية')),TextField(controller:_nameAr,decoration:const InputDecoration(labelText:'الاسم بالعربية')),TextField(controller:_fixed,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الرسوم الثابتة (ج.م)')),TextField(controller:_pct,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'النسبة المئوية (%)'))])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){if(_name.text.isEmpty||_nameAr.text.isEmpty)return;Navigator.pop(ctx);AdminServicesRepo().createSubService(providerId,{'name':_name.text,'nameAr':_nameAr.text,'category':_cat,'fixedFee':double.tryParse(_fixed.text)??0,'percentageFee':(double.tryParse(_pct.text)??0)/100}).then((_)=>ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent()));},child:const Text('إضافة'))]));
+    showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('إضافة خدمة فرعية'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:_name,decoration:const InputDecoration(labelText:'الاسم بالإنجليزية')),TextField(controller:_nameAr,decoration:const InputDecoration(labelText:'الاسم بالعربية')),TextField(controller:_fixed,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الرسوم الثابتة (ج.م)')),TextField(controller:_pct,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'النسبة المئوية (%)'))])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){if(_name.text.isEmpty||_nameAr.text.isEmpty)return;Navigator.pop(ctx);AdminServicesRepo().createSubService(providerId,{'name':_name.text,'nameAr':_nameAr.text,'category':_cat,'fixedFee':double.tryParse(_fixed.text)??0,'percentageFee':(double.tryParse(_pct.text)??0)/100}).then((_)=>ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent()));},child:const Text('إضافة'))])).then((_){_name.dispose();_nameAr.dispose();_fixed.dispose();_pct.dispose();});
   }
 }
 
@@ -539,7 +585,18 @@ class _UsersState extends State<UsersScreen> {
   List<AdminUser> _users=[]; bool _loading=true; final _search=TextEditingController();
   @override void initState(){super.initState();_load();}
   @override void dispose(){_search.dispose();super.dispose();}
-  Future<void> _load({String?search})async{setState((){_loading=true;});try{final r=await AdminUsersRepo().getUsers(search:search);setState((){_users=r.data;_loading=false;});}catch(e){setState((){_loading=false;});}}
+  Future<void> _load({String?search})async{
+    setState((){_loading=true;});
+    try{
+      final r=await AdminUsersRepo().getUsers(search:search);
+      if(!mounted)return;
+      setState((){_users=r.data;_loading=false;});
+    } catch(e){
+      print('[UsersScreen._load] $e');
+      if(!mounted)return;
+      setState((){_loading=false;});
+    }
+  }
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
     appBar:AppBar(title:const Text('المستخدمون'),backgroundColor:AC.primary),
     drawer:const AdminDrawer(),

@@ -134,7 +134,7 @@ class RequestModel {
     subServiceId: j['subServiceId'] as String?,
     serviceProvider: j['serviceProvider']!=null?ServiceProviderModel.fromJson(j['serviceProvider'] as Map<String,dynamic>):null,
     subService: j['subService']!=null?SubServiceModel.fromJson(j['subService'] as Map<String,dynamic>):null,
-    createdAt: DateTime.parse(j['createdAt'] as String),
+    createdAt: DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now(),
     completedAt: j['completedAt']!=null?DateTime.tryParse(j['completedAt'] as String):null,
     slaDeadline: j['slaDeadline']!=null?DateTime.tryParse(j['slaDeadline'] as String):null,
   );
@@ -166,7 +166,7 @@ class TransactionModel {
     status: j['status'] as String,
     externalRef: j['externalRef'] as String?,
     paymentMethod: j['paymentMethod'] as String?,
-    createdAt: DateTime.parse(j['createdAt'] as String),
+    createdAt: DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now(),
     request: j['request']!=null?RequestModel.fromJson(j['request'] as Map<String,dynamic>):null,
   );
 
@@ -191,7 +191,7 @@ class NotificationModel {
     channel: j['channel'] as String, priority: j['priority'] as String,
     isRead: (j['isRead'] as bool?)??false,
     actionUrl: j['actionUrl'] as String?,
-    createdAt: DateTime.parse(j['createdAt'] as String));
+    createdAt: DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now());
 }
 
 class RewardHistory {
@@ -204,7 +204,7 @@ class RewardHistory {
     id: j['id'] as String, points: (j['points'] as int?)??0,
     reason: j['reason'] as String,
     isEarned: (j['isEarned'] as bool?)??((j['points'] as int??0)>0),
-    createdAt: DateTime.parse(j['createdAt'] as String));
+    createdAt: DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now());
 }
 
 class RewardsSummary {
@@ -283,7 +283,7 @@ class B2BAccountModel {
     payLaterStatus: j['payLaterStatus'] as String? ?? 'PENDING_APPROVAL',
     paymentTermDays: (j['paymentTermDays'] as int?)??30,
     approvedAt: j['approvedAt']!=null?DateTime.tryParse(j['approvedAt'] as String):null,
-    createdAt: DateTime.parse(j['createdAt'] as String),
+    createdAt: DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now(),
     b2bPayLaters: (j['b2bPayLaters'] as List<dynamic>?)?.map((p)=>B2BPayLaterModel.fromJson(p as Map<String,dynamic>)).toList()??[],
   );
 
@@ -310,10 +310,10 @@ class B2BPayLaterModel {
     id: j['id'] as String, b2bAccountId: j['b2bAccountId'] as String,
     requestId: j['requestId'] as String,
     amount: double.tryParse((j['amount']??'0').toString())??0,
-    dueDate: DateTime.parse(j['dueDate'] as String),
+    dueDate: DateTime.tryParse(j['dueDate']?.toString() ?? '') ?? DateTime.now(),
     status: j['status'] as String,
     invoiceNo: j['invoiceNo'] as String,
-    createdAt: DateTime.parse(j['createdAt'] as String),
+    createdAt: DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now(),
     settledAt: j['settledAt']!=null?DateTime.tryParse(j['settledAt'] as String):null,
     notes: j['notes'] as String?,
   );

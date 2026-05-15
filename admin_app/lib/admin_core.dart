@@ -151,7 +151,7 @@ class RequestItem {
     accountNumber:j['accountNumber'] as String?,phoneNumber:j['phoneNumber'] as String?,
     adminNote:j['adminNote'] as String?,externalRef:j['externalRef'] as String?,
     processorId:j['processorId'] as String?,
-    createdAt:DateTime.parse(j['createdAt'] as String),
+    createdAt:DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now(),
     completedAt:j['completedAt']!=null?DateTime.tryParse(j['completedAt'] as String):null,
     slaDeadline:j['slaDeadline']!=null?DateTime.tryParse(j['slaDeadline'] as String):null,
     user:j['user'] as Map<String,dynamic>?,serviceProvider:j['serviceProvider'] as Map<String,dynamic>?,
@@ -162,9 +162,9 @@ class RequestItem {
   bool get isCompleted => status=='COMPLETED';
   bool get isFailed    => status=='FAILED';
   String get target    => accountNumber??phoneNumber??'—';
-  String get userPhone => user?['phone'] as String?? '—';
-  String get userName  => user?['fullName'] as String?? '—';
-  String get providerName => serviceProvider?['displayName'] as String?? '—';
+  String get userPhone => (user?['phone'] as String?) ?? '—';
+  String get userName  => (user?['fullName'] as String?) ?? '—';
+  String get providerName => (serviceProvider?['displayName'] as String?) ?? '—';
 }
 
 class DashboardStats {
@@ -176,7 +176,7 @@ class DashboardStats {
     final u=j['users'] as Map<String,dynamic>;
     final b=j['b2b'] as Map<String,dynamic>;
     final rev=j['revenue'] as Map<String,dynamic>;
-    return DashboardStats(pending:r['pending'] as int??0,inProgress:r['inProgress'] as int??0,completedToday:r['completedToday'] as int??0,failedToday:r['failedToday'] as int??0,slaBreach:r['slaBreach'] as int??0,totalUsers:u['total'] as int??0,newUsersToday:u['newToday'] as int??0,b2bPending:b['pendingApplications'] as int??0,b2bOverdue:b['overdueInvoices'] as int??0,totalRevenue:double.tryParse((rev['total']??'0').toString())??0);
+    return DashboardStats(pending:(r['pending'] as int?)??0,inProgress:(r['inProgress'] as int?)??0,completedToday:(r['completedToday'] as int?)??0,failedToday:(r['failedToday'] as int?)??0,slaBreach:(r['slaBreach'] as int?)??0,totalUsers:(u['total'] as int?)??0,newUsersToday:(u['newToday'] as int?)??0,b2bPending:(b['pendingApplications'] as int?)??0,b2bOverdue:(b['overdueInvoices'] as int?)??0,totalRevenue:double.tryParse((rev['total']??'0').toString())??0);
   }
 }
 
@@ -187,7 +187,7 @@ class B2BAccount {
   final Map<String,dynamic>? user;
   final int activeInvoices; final double overdueAmount;
   const B2BAccount({required this.id,required this.userId,required this.companyName,required this.taxId,required this.payLaterStatus,required this.creditLimit,required this.usedCredit,required this.availableCredit,required this.paymentTermDays,this.user,this.activeInvoices=0,this.overdueAmount=0});
-  factory B2BAccount.fromJson(Map<String,dynamic> j)=>B2BAccount(id:j['id'] as String,userId:j['userId'] as String,companyName:j['companyName'] as String,taxId:j['taxId'] as String,payLaterStatus:j['payLaterStatus'] as String??'PENDING_APPROVAL',creditLimit:double.tryParse((j['creditLimit']??'0').toString())??0,usedCredit:double.tryParse((j['usedCredit']??'0').toString())??0,availableCredit:double.tryParse((j['availableCredit']??'0').toString())??0,paymentTermDays:j['paymentTermDays'] as int??30,user:j['user'] as Map<String,dynamic>?,activeInvoices:j['activeInvoices'] as int??0,overdueAmount:double.tryParse((j['overdueAmount']??'0').toString())??0);
+  factory B2BAccount.fromJson(Map<String,dynamic> j)=>B2BAccount(id:j['id'] as String,userId:j['userId'] as String,companyName:j['companyName'] as String,taxId:j['taxId'] as String,payLaterStatus:(j['payLaterStatus'] as String?)??'PENDING_APPROVAL',creditLimit:double.tryParse((j['creditLimit']??'0').toString())??0,usedCredit:double.tryParse((j['usedCredit']??'0').toString())??0,availableCredit:double.tryParse((j['availableCredit']??'0').toString())??0,paymentTermDays:(j['paymentTermDays'] as int?)??30,user:j['user'] as Map<String,dynamic>?,activeInvoices:(j['activeInvoices'] as int?)??0,overdueAmount:double.tryParse((j['overdueAmount']??'0').toString())??0);
   bool get isPending => payLaterStatus=='PENDING_APPROVAL';
   double get usagePercent => creditLimit>0?(usedCredit/creditLimit).clamp(0.0,1.0):0;
 }
@@ -195,7 +195,7 @@ class B2BAccount {
 class AdminNotification {
   final String id,title,body,priority; final bool isRead; final DateTime createdAt; final String? requestId;
   const AdminNotification({required this.id,required this.title,required this.body,required this.priority,required this.isRead,required this.createdAt,this.requestId});
-  factory AdminNotification.fromJson(Map<String,dynamic> j)=>AdminNotification(id:j['id'] as String,title:j['title'] as String,body:j['body'] as String,priority:j['priority'] as String,isRead:(j['isRead'] as bool?)??false,createdAt:DateTime.parse(j['createdAt'] as String),requestId:j['requestId'] as String?);
+  factory AdminNotification.fromJson(Map<String,dynamic> j)=>AdminNotification(id:j['id'] as String,title:j['title'] as String,body:j['body'] as String,priority:j['priority'] as String,isRead:(j['isRead'] as bool?)??false,createdAt:DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now(),requestId:j['requestId'] as String?);
 }
 
 class ServiceProvider {
@@ -214,7 +214,7 @@ class SubService {
 class AdminUser {
   final String id,phone,fullName,type,status; final double walletBalance; final int pointsBalance;
   const AdminUser({required this.id,required this.phone,required this.fullName,required this.type,required this.status,required this.walletBalance,required this.pointsBalance});
-  factory AdminUser.fromJson(Map<String,dynamic> j)=>AdminUser(id:j['id'] as String,phone:j['phone'] as String,fullName:j['fullName'] as String,type:j['type'] as String??'B2C',status:j['status'] as String??'ACTIVE',walletBalance:double.tryParse((j['walletBalance']??'0').toString())??0,pointsBalance:(j['pointsBalance'] as int?)??0);
+  factory AdminUser.fromJson(Map<String,dynamic> j)=>AdminUser(id:j['id'] as String,phone:j['phone'] as String,fullName:j['fullName'] as String,type:(j['type'] as String?)??'B2C',status:(j['status'] as String?)??'ACTIVE',walletBalance:double.tryParse((j['walletBalance']??'0').toString())??0,pointsBalance:(j['pointsBalance'] as int?)??0);
 }
 
 class PagedData<T> {

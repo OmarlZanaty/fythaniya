@@ -161,6 +161,79 @@ router.get('/transactions', async (req, res, next) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+//  WALLET (top-up & transfer)
+// ═══════════════════════════════════════════════════════════
+
+router.post('/wallet/topup',
+  [body('amount').isFloat({ min: 10, max: 10000 })],
+  validate,
+  async (req, res, next) => {
+    try {
+      const amount = Number(req.body.amount);
+      const result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.user.update({
+          where: { id: req.user.id },
+          data: { walletBalance: { increment: amount } },
+          select: { walletBalance: true },
+        });
+        const txn = await tx.transaction.create({
+          data: {
+            userId: req.user.id,
+            amount, fee: 0, totalAmount: amount,
+            status: 'SUCCESS', paymentMethod: 'TOPUP',
+          },
+        });
+        return { newBalance: updated.walletBalance, transactionId: txn.id };
+      });
+      await notifyUser(req.user.id, '💰 تم شحن المحفظة', `تم إضافة ${amount} ج.م إلى محفظتك`, 'NORMAL');
+      return apiResponse.success(res, result, 'تم شحن المحفظة بنجاح', 201);
+    } catch (err) { next(err); }
+  }
+);
+
+router.post('/wallet/transfer',
+  [
+    body('toPhone').trim().matches(/^[0-9+]{7,15}$/).withMessage('رقم هاتف المستلم غير صحيح'),
+    body('amount').isFloat({ min: 5 }),
+    body('note').optional().isLength({ max: 200 }),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      const { toPhone, note } = req.body;
+      const amount = Number(req.body.amount);
+      const toPhoneTrim = toPhone.trim();
+
+      const sender = await prisma.user.findUnique({ where: { id: req.user.id }, select: { id: true, phone: true, walletBalance: true, fullName: true } });
+      if (sender.phone === toPhoneTrim) return apiResponse.error(res, 'لا يمكنك التحويل إلى نفسك', 400);
+      if (Number(sender.walletBalance) < amount) return apiResponse.error(res, 'الرصيد غير كافٍ', 400);
+
+      const recipient = await prisma.user.findUnique({ where: { phone: toPhoneTrim }, select: { id: true, phone: true, fullName: true, status: true } });
+      if (!recipient) return apiResponse.error(res, 'المستلم غير موجود', 404);
+      if (recipient.status !== 'ACTIVE') return apiResponse.error(res, 'حساب المستلم غير نشط', 400);
+
+      const result = await prisma.$transaction(async (tx) => {
+        await tx.user.update({ where: { id: sender.id }, data: { walletBalance: { decrement: amount } } });
+        const recv = await tx.user.update({ where: { id: recipient.id }, data: { walletBalance: { increment: amount } }, select: { walletBalance: true } });
+        const senderTxn = await tx.transaction.create({
+          data: { userId: sender.id, amount, fee: 0, totalAmount: amount, status: 'SUCCESS', paymentMethod: 'TRANSFER_OUT', externalRef: recipient.phone },
+        });
+        await tx.transaction.create({
+          data: { userId: recipient.id, amount, fee: 0, totalAmount: amount, status: 'SUCCESS', paymentMethod: 'TRANSFER_IN', externalRef: sender.phone },
+        });
+        const updatedSender = await tx.user.findUnique({ where: { id: sender.id }, select: { walletBalance: true } });
+        return { newBalance: updatedSender.walletBalance, transactionId: senderTxn.id, recipientName: recipient.fullName };
+      });
+
+      await notifyUser(sender.id, '💸 تم التحويل', `تم تحويل ${amount} ج.م إلى ${recipient.fullName}`, 'NORMAL');
+      await notifyUser(recipient.id, '💰 تحويل وارد', `استلمت ${amount} ج.م من ${sender.fullName}${note ? ' — ' + note : ''}`, 'NORMAL');
+
+      return apiResponse.success(res, result, 'تم التحويل بنجاح', 201);
+    } catch (err) { next(err); }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════
 //  NOTIFICATIONS
 // ═══════════════════════════════════════════════════════════
 

@@ -113,6 +113,8 @@ router.put('/requests/:id/assign', async (req, res, next) => {
     });
     const io = req.app.get('io');
     emitToAdmins(io, 'request_updated', { requestId: r.id, status: 'ASSIGNED', processorId: req.admin.id });
+    emitToUser(io, r.userId, 'request_updated', { requestId: r.id, status: 'ASSIGNED' });
+    await notifyUser(r.userId, '👤 تم استلام طلبك', 'تم تعيين موظف لمعالجة طلبك', 'NORMAL', { requestId: r.id, status: 'ASSIGNED' });
     await prisma.auditLog.create({ data: { adminId: req.admin.id, requestId: r.id, action: 'ASSIGN', entity: 'request', entityId: r.id } });
     return apiResponse.success(res, updated, 'تم التعيين');
   } catch (err) { next(err); }
@@ -126,6 +128,8 @@ router.put('/requests/:id/start', async (req, res, next) => {
     const updated = await prisma.request.update({ where: { id: r.id }, data: { status: 'IN_PROGRESS', processorId: req.admin.id } });
     const io = req.app.get('io');
     emitToAdmins(io, 'request_updated', { requestId: r.id, status: 'IN_PROGRESS' });
+    emitToUser(io, r.userId, 'request_updated', { requestId: r.id, status: 'IN_PROGRESS' });
+    await notifyUser(r.userId, '⏳ جارٍ تنفيذ طلبك', 'بدأ معالج المعاملات بتنفيذ طلبك الآن', 'NORMAL', { requestId: r.id, status: 'IN_PROGRESS' });
     return apiResponse.success(res, updated);
   } catch (err) { next(err); }
 });

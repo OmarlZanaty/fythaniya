@@ -8,6 +8,7 @@ import 'package:percent_indicator/percent_indicator.dart';
 import 'package:badges/badges.dart' as badges;
 import 'admin_core.dart';
 import 'admin_api.dart';
+import 'admin_notification_service.dart';
 import 'admin_blocs.dart';
 
 // ════════════════════════════════════════════════════════
@@ -18,6 +19,7 @@ void main() async {
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(statusBarColor:Colors.transparent,statusBarIconBrightness:Brightness.light));
   AdminApiClient.instance.init();
+  await AdminNotificationService.instance.init();
   runApp(const AdminApp());
 }
 

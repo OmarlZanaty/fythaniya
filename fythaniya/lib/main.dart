@@ -8,6 +8,7 @@ import 'package:fythaniya/core/theme/app_theme.dart';
 import 'package:fythaniya/core/constants/constants.dart';
 import 'package:fythaniya/core/network/api_client.dart';
 import 'package:fythaniya/core/network/socket_service.dart';
+import 'package:fythaniya/core/notifications/notification_service.dart';
 import 'package:fythaniya/data/models/models.dart';
 import 'package:fythaniya/presentation/blocs/blocs.dart';
 import 'package:fythaniya/presentation/screens/all_screens.dart';
@@ -20,6 +21,7 @@ void main() async {
     statusBarIconBrightness: Brightness.light,
   ));
   ApiClient.instance.init();
+  await NotificationService.instance.init();
   runApp(const FythaniyaApp());
 }
 
@@ -38,6 +40,13 @@ class _FythaniyaAppState extends State<FythaniyaApp> {
     super.initState();
     _authBloc = AuthBloc();
     _notifier = _AuthNotifier(_authBloc);
+    _authBloc.stream.listen((state) {
+      if (state is AuthAuthenticated) {
+        SocketService.instance.connect();
+      } else if (state is AuthUnauthenticated) {
+        SocketService.instance.disconnect();
+      }
+    });
     _router = GoRouter(
       initialLocation: AppRoutes.splash,
       refreshListenable: _notifier,

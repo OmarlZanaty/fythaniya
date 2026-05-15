@@ -4,6 +4,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Apply Google Services plugin only if google-services.json is present.
+// Drop the file into android/app/ to enable Firebase Cloud Messaging.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.almobarmg.fythaniya"
     compileSdk = flutter.compileSdkVersion

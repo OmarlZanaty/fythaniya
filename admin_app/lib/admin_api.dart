@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'admin_core.dart';
+import 'admin_notification_service.dart';
 
 // ── Exception ──────────────────────────────────────────────
 class AdminApiException implements Exception {
@@ -137,11 +138,31 @@ class AdminSocketService {
         final id = (payload['requestId'] ?? payload['id']) as String?;
         if (id == null) return;
         newRequest.value = await AdminRequestsRepo().getRequest(id);
+        final amount = payload['amount']?.toString() ?? '';
+        final type = payload['type']?.toString() ?? '';
+        AdminNotificationService.instance.show(
+          title: '🔔 طلب جديد', body: '$type — $amount ج.م', payload: id,
+        );
       } catch (e) { debugPrint('[ADMIN SOCKET] new_request parse failed: $e'); }
     });
-    _socket!.on('request_updated',(d)=>requestUpdated.value=Map<String,dynamic>.from(d as Map));
-    _socket!.on('sla_breach',(d)=>slaBreach.value=Map<String,dynamic>.from(d as Map));
-    _socket!.on('b2b_application',(d)=>b2bApplication.value=Map<String,dynamic>.from(d as Map));
+    _socket!.on('request_updated',(d){
+      final m=Map<String,dynamic>.from(d as Map);
+      requestUpdated.value=m;
+    });
+    _socket!.on('sla_breach',(d){
+      final m=Map<String,dynamic>.from(d as Map);
+      slaBreach.value=m;
+      AdminNotificationService.instance.show(
+        title: '⚠️ تجاوز SLA', body: 'طلب تجاوز مدة المعالجة المسموحة', payload: m['requestId']?.toString(),
+      );
+    });
+    _socket!.on('b2b_application',(d){
+      final m=Map<String,dynamic>.from(d as Map);
+      b2bApplication.value=m;
+      AdminNotificationService.instance.show(
+        title: '🏢 طلب B2B جديد', body: m['companyName']?.toString() ?? 'طلب اعتماد حساب أعمال', payload: m['applicationId']?.toString(),
+      );
+    });
     _socket!.connect();
   }
   void disconnect(){_socket?.disconnect();_connected=false;}

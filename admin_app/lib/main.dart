@@ -172,11 +172,11 @@ class LoginScreen extends StatefulWidget { const LoginScreen({super.key}); @over
 class _LoginState extends State<LoginScreen> {
   final _form=GlobalKey<FormState>();final _email=TextEditingController();final _pass=TextEditingController();
   @override void dispose(){_email.dispose();_pass.dispose();super.dispose();}
-  @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.primary,body:SafeArea(child:Column(children:[
+  @override Widget build(BuildContext ctx)=>Scaffold(body:Container(decoration:const BoxDecoration(gradient:AG.hero),child:SafeArea(child:Column(children:[
     const SizedBox(height:60),
-    Container(width:120,height:120,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(24),boxShadow:[BoxShadow(color:Colors.black.withOpacity(0.2),blurRadius:20)]),padding: const EdgeInsets.all(12), child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.asset('assets/images/logo.png', fit: BoxFit.contain))),
-    const SizedBox(height:16),Text('فى ثانية',style:AT.h1.copyWith(color:Colors.white,fontSize:28)),
-    Text('لوحة الإدارة',style:AT.cap.copyWith(color:Colors.white70)),
+    Container(width:120,height:120,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(28),boxShadow:[BoxShadow(color:AC.light.withOpacity(0.4),blurRadius:36,spreadRadius:4),BoxShadow(color:Colors.black.withOpacity(0.25),blurRadius:20,offset:const Offset(0,8))]),padding: const EdgeInsets.all(14), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.asset('assets/images/logo.png', fit: BoxFit.contain))),
+    const SizedBox(height:16),Text('فى ثانية',style:AT.h1.copyWith(color:Colors.white,fontSize:28,letterSpacing:0.5)),
+    Text('لوحة الإدارة',style:AT.cap.copyWith(color:Colors.white.withOpacity(0.85))),
     const SizedBox(height:48),
     Expanded(child:Container(decoration:const BoxDecoration(color:AC.bg,borderRadius:BorderRadius.vertical(top:Radius.circular(28))),child:BlocConsumer<AdminAuthBloc,AdminAuthState>(
       listener:(ctx,s){if(s is AdminAuthLoggedIn){AdminSocketService.instance.connect();ctx.go(AdminRoutes.dashboard);}if(s is AdminAuthError)_showErr(ctx,s.msg);},
@@ -188,7 +188,7 @@ class _LoginState extends State<LoginScreen> {
         const SizedBox(height:AD.xl),
         SizedBox(width:double.infinity,height:AD.btnH,child:ElevatedButton(onPressed:s is AdminAuthLoading?null:(){if(_form.currentState!.validate())ctx.read<AdminAuthBloc>().add(AdminLoginEvent(_email.text.trim(),_pass.text));},child:s is AdminAuthLoading?const SizedBox(width:22,height:22,child:CircularProgressIndicator(strokeWidth:2.5,color:Colors.white)):const Text('دخول',style:AT.btn))),
       ]))))),
-    )])));
+    )]))));
 }
 
 // ════════════════════════════════════════════════════════

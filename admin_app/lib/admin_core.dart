@@ -19,32 +19,64 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:badges/badges.dart' as badges;
 
-// ── Colors ─────────────────────────────────────────────────
+// ── Colors (brand palette derived from the app logo) ───────
 class AC {
   AC._();
-  static const Color primary    = Color(0xFF0E7490);
-  static const Color dark       = Color(0xFF0C5F78);
-  static const Color accent     = Color(0xFFD97706);
-  static const Color bg         = Color(0xFFF0F9FF);
+  static const Color primary    = Color(0xFF1E40AF); // royal blue (logo accent)
+  static const Color dark       = Color(0xFF0F1729); // logo background
+  static const Color deep       = Color(0xFF172554); // mid-step between dark and primary
+  static const Color light      = Color(0xFF3B82F6); // logo highlight
+  static const Color pale       = Color(0xFF60A5FA);
+  static const Color secondary  = Color(0xFF06B6D4); // cyan
+  static const Color accent     = Color(0xFFF59E0B); // amber
+  static const Color bg         = Color(0xFFF8FAFC);
+  static const Color bgTint     = Color(0xFFEFF6FF);
   static const Color surface    = Color(0xFFFFFFFF);
-  static const Color surfaceAlt = Color(0xFFE0F2FE);
+  static const Color surfaceAlt = Color(0xFFF1F5F9);
   static const Color text       = Color(0xFF0F172A);
   static const Color textSec    = Color(0xFF475569);
   static const Color textMuted  = Color(0xFF94A3B8);
-  static const Color success    = Color(0xFF059669);
+  static const Color success    = Color(0xFF10B981);
   static const Color successBg  = Color(0xFFD1FAE5);
-  static const Color warning    = Color(0xFFD97706);
+  static const Color warning    = Color(0xFFF59E0B);
   static const Color warningBg  = Color(0xFFFEF3C7);
-  static const Color error      = Color(0xFFDC2626);
+  static const Color error      = Color(0xFFEF4444);
   static const Color errorBg    = Color(0xFFFEE2E2);
-  static const Color info       = Color(0xFF0E7490);
-  static const Color infoBg     = Color(0xFFE0F2FE);
-  static const Color border     = Color(0xFFBAE6FD);
+  static const Color info       = Color(0xFF3B82F6);
+  static const Color infoBg     = Color(0xFFDBEAFE);
+  static const Color border     = Color(0xFFCBD5E1);
+  static const Color borderLight= Color(0xFFE2E8F0);
   static const Color divider    = Color(0xFFE2E8F0);
-  static const Color b2b        = Color(0xFF1D4ED8);
-  static const Color b2bBg      = Color(0xFFEFF6FF);
-  static const Color critical   = Color(0xFF7C3AED);
-  static const Color criticalBg = Color(0xFFF5F3FF);
+  static const Color b2b        = Color(0xFF7C3AED);
+  static const Color b2bBg      = Color(0xFFF5F3FF);
+  static const Color critical   = Color(0xFFEF4444);
+  static const Color criticalBg = Color(0xFFFEE2E2);
+}
+
+// Admin-side gradients mirroring the user app
+class AG {
+  AG._();
+  static const LinearGradient hero = LinearGradient(
+    begin: Alignment.topCenter, end: Alignment.bottomCenter,
+    colors: [Color(0xFF0F1729), Color(0xFF172554), Color(0xFF1E40AF), Color(0xFF3B82F6)],
+    stops: [0.0, 0.35, 0.75, 1.0],
+  );
+  static const LinearGradient primary = LinearGradient(
+    begin: Alignment.topLeft, end: Alignment.bottomRight,
+    colors: [Color(0xFF1E40AF), Color(0xFF3B82F6)],
+  );
+  static const LinearGradient primaryDeep = LinearGradient(
+    begin: Alignment.topLeft, end: Alignment.bottomRight,
+    colors: [Color(0xFF0F1729), Color(0xFF1E40AF)],
+  );
+  static const LinearGradient b2b = LinearGradient(
+    begin: Alignment.topLeft, end: Alignment.bottomRight,
+    colors: [Color(0xFF7C3AED), Color(0xFFA855F7)],
+  );
+  static const LinearGradient success = LinearGradient(
+    begin: Alignment.topLeft, end: Alignment.bottomRight,
+    colors: [Color(0xFF10B981), Color(0xFF34D399)],
+  );
 }
 
 // ── Text Styles ────────────────────────────────────────────
@@ -74,14 +106,62 @@ class AD {
 ThemeData get adminTheme => ThemeData(
   useMaterial3:true,brightness:Brightness.light,fontFamily:'Cairo',
   scaffoldBackgroundColor:AC.bg,primaryColor:AC.primary,
-  colorScheme:const ColorScheme.light(primary:AC.primary,onPrimary:Colors.white,secondary:AC.accent,surface:AC.surface,onSurface:AC.text,error:AC.error),
-  appBarTheme:const AppBarTheme(backgroundColor:AC.primary,elevation:0,centerTitle:true,titleTextStyle:TextStyle(fontFamily:'Cairo',fontSize:17,fontWeight:FontWeight.w700,color:Colors.white),iconTheme:IconThemeData(color:Colors.white,size:22),systemOverlayStyle:SystemUiOverlayStyle(statusBarColor:Colors.transparent,statusBarIconBrightness:Brightness.light)),
-  elevatedButtonTheme:ElevatedButtonThemeData(style:ButtonStyle(backgroundColor:WidgetStateProperty.resolveWith((s)=>s.contains(WidgetState.disabled)?AC.divider:AC.primary),foregroundColor:WidgetStateProperty.all(Colors.white),elevation:WidgetStateProperty.all(0),minimumSize:WidgetStateProperty.all(const Size(double.infinity,AD.btnH)),shape:WidgetStateProperty.all(RoundedRectangleBorder(borderRadius:BorderRadius.circular(AD.r12))),textStyle:WidgetStateProperty.all(AT.btn))),
-  inputDecorationTheme:InputDecorationTheme(filled:true,fillColor:AC.surface,border:OutlineInputBorder(borderRadius:BorderRadius.circular(AD.r12),borderSide:const BorderSide(color:AC.border)),enabledBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(AD.r12),borderSide:const BorderSide(color:AC.border)),focusedBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(AD.r12),borderSide:const BorderSide(color:AC.primary,width:1.5)),contentPadding:const EdgeInsets.symmetric(horizontal:16,vertical:16)),
-  cardTheme:CardThemeData(color:AC.surface,elevation:0,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(AD.r16),side:const BorderSide(color:AC.border,width:0.8)),margin:EdgeInsets.zero),
+  colorScheme:const ColorScheme.light(
+    primary:AC.primary,onPrimary:Colors.white,
+    primaryContainer:AC.infoBg,onPrimaryContainer:AC.deep,
+    secondary:AC.secondary,onSecondary:Colors.white,
+    tertiary:AC.accent,onTertiary:Colors.white,
+    surface:AC.surface,onSurface:AC.text,
+    error:AC.error,outline:AC.border,
+  ),
+  appBarTheme:const AppBarTheme(backgroundColor:AC.primary,elevation:0,centerTitle:true,scrolledUnderElevation:0,titleTextStyle:TextStyle(fontFamily:'Cairo',fontSize:17,fontWeight:FontWeight.w700,color:Colors.white),iconTheme:IconThemeData(color:Colors.white,size:22),systemOverlayStyle:SystemUiOverlayStyle(statusBarColor:Colors.transparent,statusBarIconBrightness:Brightness.light)),
+  elevatedButtonTheme:ElevatedButtonThemeData(style:ButtonStyle(
+    backgroundColor:WidgetStateProperty.resolveWith((s)=>s.contains(WidgetState.disabled)?AC.divider:AC.primary),
+    foregroundColor:WidgetStateProperty.all(Colors.white),
+    elevation:WidgetStateProperty.resolveWith((s)=>s.contains(WidgetState.pressed)?1:2),
+    shadowColor:WidgetStateProperty.all(AC.primary.withOpacity(0.35)),
+    minimumSize:WidgetStateProperty.all(const Size(double.infinity,AD.btnH)),
+    shape:WidgetStateProperty.all(RoundedRectangleBorder(borderRadius:BorderRadius.circular(AD.r16))),
+    textStyle:WidgetStateProperty.all(AT.btn),
+  )),
+  outlinedButtonTheme:OutlinedButtonThemeData(style:ButtonStyle(
+    foregroundColor:WidgetStateProperty.all(AC.primary),
+    side:WidgetStateProperty.all(const BorderSide(color:AC.primary,width:1.5)),
+    shape:WidgetStateProperty.all(RoundedRectangleBorder(borderRadius:BorderRadius.circular(AD.r16))),
+  )),
+  textButtonTheme:TextButtonThemeData(style:ButtonStyle(foregroundColor:WidgetStateProperty.all(AC.primary))),
+  inputDecorationTheme:InputDecorationTheme(filled:true,fillColor:AC.surface,
+    border:OutlineInputBorder(borderRadius:BorderRadius.circular(AD.r12),borderSide:const BorderSide(color:AC.border)),
+    enabledBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(AD.r12),borderSide:const BorderSide(color:AC.border)),
+    focusedBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(AD.r12),borderSide:const BorderSide(color:AC.light,width:1.8)),
+    errorBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(AD.r12),borderSide:const BorderSide(color:AC.error)),
+    contentPadding:const EdgeInsets.symmetric(horizontal:16,vertical:16),
+  ),
+  cardTheme:CardThemeData(color:AC.surface,elevation:0,surfaceTintColor:Colors.transparent,
+    shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(AD.r16),side:const BorderSide(color:AC.borderLight,width:1)),
+    margin:EdgeInsets.zero,
+  ),
+  bottomNavigationBarTheme:const BottomNavigationBarThemeData(
+    backgroundColor:AC.surface,selectedItemColor:AC.primary,unselectedItemColor:AC.textMuted,
+    type:BottomNavigationBarType.fixed,elevation:8,
+    selectedLabelStyle:TextStyle(fontFamily:'Cairo',fontSize:11,fontWeight:FontWeight.w700),
+    unselectedLabelStyle:TextStyle(fontFamily:'Cairo',fontSize:11),
+  ),
+  tabBarTheme:const TabBarThemeData(
+    labelColor:Colors.white,unselectedLabelColor:Color(0xFFCBD5E1),
+    indicatorColor:Colors.white,indicatorSize:TabBarIndicatorSize.label,
+    labelStyle:TextStyle(fontFamily:'Cairo',fontSize:14,fontWeight:FontWeight.w700),
+    unselectedLabelStyle:TextStyle(fontFamily:'Cairo',fontSize:14,fontWeight:FontWeight.w500),
+  ),
   dividerTheme:const DividerThemeData(color:AC.divider,thickness:1,space:0),
-  dialogTheme:DialogThemeData(backgroundColor:AC.surface,surfaceTintColor:Colors.transparent,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20))),
-  snackBarTheme:SnackBarThemeData(backgroundColor:AC.text,contentTextStyle:AT.body.copyWith(color:Colors.white),behavior:SnackBarBehavior.floating,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(10))),
+  dialogTheme:DialogThemeData(backgroundColor:AC.surface,surfaceTintColor:Colors.transparent,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24))),
+  snackBarTheme:SnackBarThemeData(backgroundColor:AC.dark,contentTextStyle:AT.body.copyWith(color:Colors.white),behavior:SnackBarBehavior.floating,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(12))),
+  progressIndicatorTheme:const ProgressIndicatorThemeData(color:AC.primary),
+  chipTheme:ChipThemeData(
+    backgroundColor:AC.surfaceAlt, selectedColor:AC.infoBg,
+    labelStyle:AT.cap, side:const BorderSide(color:AC.borderLight),
+    shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)),
+  ),
 );
 
 // ═══════════════════════════════════════════════════════════

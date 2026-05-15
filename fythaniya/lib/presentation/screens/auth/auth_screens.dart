@@ -23,17 +23,23 @@ class _AuthBase extends StatelessWidget {
   final Widget child;
   const _AuthBase({required this.child});
   @override Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AppColors.primary,
-    body: SafeArea(child:Column(children:[
-      Padding(padding:const EdgeInsets.symmetric(vertical:24),child:Column(children:[
-        SizedBox(height:60, child: Image.asset('assets/images/logo.png', fit: BoxFit.contain)),
-        const SizedBox(height:8),
-        Text(AppConstants.appName,style:TS.h2.copyWith(color:Colors.white)),
-      ])),
-      Expanded(child:Container(
-        decoration:const BoxDecoration(color:AppColors.bg,borderRadius:BorderRadius.vertical(top:Radius.circular(28))),
-        child:SingleChildScrollView(padding:const EdgeInsets.all(D.xl),child:child))),
-    ])));
+    body: Container(decoration: const BoxDecoration(gradient: AppGradients.hero),
+      child: SafeArea(child:Column(children:[
+        Padding(padding:const EdgeInsets.symmetric(vertical:28),child:Column(children:[
+          Container(
+            width: 80, height: 80,
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: AppColors.primaryLight.withOpacity(0.4), blurRadius: 30, spreadRadius: 4)]),
+            padding: const EdgeInsets.all(10),
+            child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.asset('assets/images/logo.png', fit: BoxFit.contain)),
+          ),
+          const SizedBox(height:12),
+          Text(AppConstants.appName,style:TS.h2.copyWith(color:Colors.white, letterSpacing: 0.5)),
+        ])),
+        Expanded(child:Container(
+          decoration:const BoxDecoration(color:AppColors.bg,borderRadius:BorderRadius.vertical(top:Radius.circular(32))),
+          child:SingleChildScrollView(padding:const EdgeInsets.all(D.xl),child:child))),
+      ]))));
 }
 
 void _showErr(BuildContext ctx, String msg) =>

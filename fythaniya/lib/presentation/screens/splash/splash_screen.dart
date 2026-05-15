@@ -33,15 +33,22 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       }
     },
     child: Scaffold(
-      backgroundColor: AppColors.primary,
-      body: Center(child: FadeTransition(opacity:_fade, child:ScaleTransition(scale:_scale,child:Column(mainAxisSize:MainAxisSize.min,children:[
-        Container(width:130,height:130,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(28),boxShadow:[BoxShadow(color:Colors.black.withOpacity(0.2),blurRadius:24,spreadRadius:4)]),
-          padding: const EdgeInsets.all(14),
-          child: ClipRRect(borderRadius: BorderRadius.circular(18), child: Image.asset('assets/images/logo.png', fit: BoxFit.contain))),
-        const SizedBox(height:24),
-        Text(AppConstants.appName,style:TS.amount.copyWith(color:Colors.white,fontSize:36)),
-        const SizedBox(height:8),Text(AppConstants.appTagline,style:TS.body.copyWith(color:Colors.white70)),
-        const SizedBox(height:48),
-        CircularProgressIndicator(strokeWidth:2,color:Colors.white.withOpacity(0.6)),
-      ]))))));
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppGradients.hero),
+        child: Center(child: FadeTransition(opacity:_fade, child:ScaleTransition(scale:_scale,child:Column(mainAxisSize:MainAxisSize.min,children:[
+          Container(width:140,height:140,decoration:BoxDecoration(
+            color:Colors.white,borderRadius:BorderRadius.circular(32),
+            boxShadow:[
+              BoxShadow(color:AppColors.primaryLight.withOpacity(0.35),blurRadius:40,spreadRadius:6),
+              BoxShadow(color:Colors.black.withOpacity(0.25),blurRadius:24,offset: const Offset(0,8)),
+            ],
+          ), padding: const EdgeInsets.all(16),
+            child: ClipRRect(borderRadius: BorderRadius.circular(20), child: Image.asset('assets/images/logo.png', fit: BoxFit.contain))),
+          const SizedBox(height:28),
+          Text(AppConstants.appName,style:TS.amount.copyWith(color:Colors.white,fontSize:38,letterSpacing:0.5)),
+          const SizedBox(height:8),Text(AppConstants.appTagline,style:TS.body.copyWith(color:Colors.white.withOpacity(0.85))),
+          const SizedBox(height:56),
+          CircularProgressIndicator(strokeWidth:2.5,color:Colors.white.withOpacity(0.7)),
+        ]))))),
+      )));
 }

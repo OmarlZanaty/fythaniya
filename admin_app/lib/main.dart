@@ -155,7 +155,7 @@ class _LoginState extends State<LoginScreen> {
         const SizedBox(height:AD.xl),
         SizedBox(width:double.infinity,height:AD.btnH,child:ElevatedButton(onPressed:s is AdminAuthLoading?null:(){if(_form.currentState!.validate())ctx.read<AdminAuthBloc>().add(AdminLoginEvent(_email.text.trim(),_pass.text));},child:s is AdminAuthLoading?const SizedBox(width:22,height:22,child:CircularProgressIndicator(strokeWidth:2.5,color:Colors.white)):const Text('دخول',style:AT.btn))),
       ]))))),
-  ])));
+    )])));
 }
 
 // ════════════════════════════════════════════════════════
@@ -258,7 +258,7 @@ class _ReqScreenState extends State<RequestsScreen> {
   @override void dispose(){_search.dispose();super.dispose();}
   void _initSocket(){AdminSocketService.instance.newRequest.addListener((){final r=AdminSocketService.instance.newRequest.value;if(r!=null&&mounted)context.read<ReqBloc>().add(ReqNewEvent(r));});}
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
-    appBar:AppBar(title:const Text('طابور الطلبات'),backgroundColor:AC.primary,leading:IconButton(icon:const Icon(Icons.menu_rounded),onPressed:()=>Scaffold.of(ctx).openDrawer()),actions:[IconButton(icon:const Icon(Icons.refresh_rounded),onPressed:()=>ctx.read<ReqBloc>().add(ReqRefreshEvent()))]),
+    appBar:AppBar(title:const Text('طابور الطلبات'),backgroundColor:AC.primary,actions:[IconButton(icon:const Icon(Icons.refresh_rounded),onPressed:()=>ctx.read<ReqBloc>().add(ReqRefreshEvent()))]),
     drawer:const AdminDrawer(),
     body:Column(children:[
       // Search
@@ -383,7 +383,7 @@ class _B2BScreenState extends State<B2BScreen> with SingleTickerProviderStateMix
   @override void initState(){super.initState();_tab=TabController(length:2,vsync:this);context.read<AdminB2BBloc>().add(AdminB2BLoadApplicationsEvent());}
   @override void dispose(){_tab.dispose();super.dispose();}
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
-    appBar:AppBar(title:const Text('B2B'),backgroundColor:AC.primary,leading:IconButton(icon:const Icon(Icons.menu_rounded),onPressed:()=>Scaffold.of(ctx).openDrawer()),
+    appBar:AppBar(title:const Text('B2B'),backgroundColor:AC.primary,
       bottom:TabBar(controller:_tab,labelColor:Colors.white,unselectedLabelColor:Colors.white70,indicatorColor:Colors.white,
         onTap:(i){if(i==0)ctx.read<AdminB2BBloc>().add(AdminB2BLoadApplicationsEvent());else ctx.read<AdminB2BBloc>().add(AdminB2BLoadAccountsEvent());},
         tabs:const[Tab(text:'طلبات معلقة'),Tab(text:'الحسابات النشطة')])),
@@ -492,7 +492,7 @@ class ServicesScreen extends StatefulWidget { const ServicesScreen({super.key});
 class _ServicesState extends State<ServicesScreen> {
   @override void initState(){super.initState();context.read<AdminServicesBloc>().add(AdminServicesLoadEvent());}
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
-    appBar:AppBar(title:const Text('الخدمات'),backgroundColor:AC.primary,leading:IconButton(icon:const Icon(Icons.menu_rounded),onPressed:()=>Scaffold.of(ctx).openDrawer()),
+    appBar:AppBar(title:const Text('الخدمات'),backgroundColor:AC.primary,
       actions:[IconButton(icon:const Icon(Icons.add_rounded),onPressed:()=>_showAddProvider(ctx))]),
     drawer:const AdminDrawer(),
     body:BlocConsumer<AdminServicesBloc,AdminServicesState>(
@@ -539,7 +539,7 @@ class _UsersState extends State<UsersScreen> {
   @override void dispose(){_search.dispose();super.dispose();}
   Future<void> _load({String?search})async{setState((){_loading=true;});try{final r=await AdminUsersRepo().getUsers(search:search);setState((){_users=r.data;_loading=false;});}catch(e){setState((){_loading=false;});}}
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
-    appBar:AppBar(title:const Text('المستخدمون'),backgroundColor:AC.primary,leading:IconButton(icon:const Icon(Icons.menu_rounded),onPressed:()=>Scaffold.of(ctx).openDrawer())),
+    appBar:AppBar(title:const Text('المستخدمون'),backgroundColor:AC.primary),
     drawer:const AdminDrawer(),
     body:Column(children:[
       Padding(padding:const EdgeInsets.all(AD.md),child:TextField(controller:_search,textDirection:TextDirection.rtl,decoration:InputDecoration(hintText:'بحث بالهاتف أو الاسم...',prefixIcon:const Icon(Icons.search_rounded),border:OutlineInputBorder(borderRadius:BorderRadius.circular(AD.r12)),filled:true,fillColor:AC.surface),onSubmitted:(v)=>_load(search:v.trim()))),
@@ -562,7 +562,7 @@ class AdminNotifsScreen extends StatefulWidget { const AdminNotifsScreen({super.
 class _ANotifsState extends State<AdminNotifsScreen> {
   @override void initState(){super.initState();context.read<AdminNotifBloc>().add(AdminNotifLoadEvent());}
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
-    appBar:AppBar(title:const Text('الإشعارات'),backgroundColor:AC.primary,leading:IconButton(icon:const Icon(Icons.menu_rounded),onPressed:()=>Scaffold.of(ctx).openDrawer()),
+    appBar:AppBar(title:const Text('الإشعارات'),backgroundColor:AC.primary,
       actions:[TextButton(onPressed:()=>ctx.read<AdminNotifBloc>().add(AdminNotifMarkAllEvent()),child:const Text('تعيين الكل',style:TextStyle(color:Colors.white70)))]),
     drawer:const AdminDrawer(),
     body:BlocBuilder<AdminNotifBloc,AdminNotifState>(builder:(ctx,s){
@@ -589,4 +589,4 @@ class _ANotifsState extends State<AdminNotifsScreen> {
 // ════════════════════════════════════════════════════════
 //  SETTINGS SCREEN
 // ════════════════════════════════════════════════════════
-class SettingsScreen extends StatelessWidget { const SettingsScreen({super.key}); @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,appBar:AppBar(title:const Text('الإعدادات'),backgroundColor:AC.primary,leading:IconButton(icon:const Icon(Icons.menu_rounded),onPressed:()=>Scaffold.of(ctx).openDrawer())),drawer:const AdminDrawer(),body:ListView(padding:const EdgeInsets.all(AD.md),children:[ACard(child:ListTile(leading:const Icon(Icons.logout_rounded,color:AC.error),title:Text('تسجيل الخروج',style:AT.body.copyWith(color:AC.error)),onTap:()=>ctx.read<AdminAuthBloc>().add(AdminLogoutEvent())))])); }
+class SettingsScreen extends StatelessWidget { const SettingsScreen({super.key}); @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,appBar:AppBar(title:const Text('الإعدادات'),backgroundColor:AC.primary),drawer:const AdminDrawer(),body:ListView(padding:const EdgeInsets.all(AD.md),children:[ACard(child:ListTile(leading:const Icon(Icons.logout_rounded,color:AC.error),title:Text('تسجيل الخروج',style:AT.body.copyWith(color:AC.error)),onTap:()=>ctx.read<AdminAuthBloc>().add(AdminLogoutEvent())))])); }

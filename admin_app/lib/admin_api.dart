@@ -131,7 +131,14 @@ class AdminSocketService {
     _socket=io.io(AdminConstants.socketUrl,io.OptionBuilder().setTransports(['websocket']).setAuth({'token':token}).enableAutoConnect().enableReconnection().build());
     _socket!.onConnect((_){_connected=true;debugPrint('[ADMIN SOCKET] Connected');});
     _socket!.onDisconnect((_){_connected=false;});
-    _socket!.on('new_request',(d)=>newRequest.value=RequestItem.fromJson(Map<String,dynamic>.from(d as Map)));
+    _socket!.on('new_request',(d) async {
+      try {
+        final payload = Map<String,dynamic>.from(d as Map);
+        final id = (payload['requestId'] ?? payload['id']) as String?;
+        if (id == null) return;
+        newRequest.value = await AdminRequestsRepo().getRequest(id);
+      } catch (e) { debugPrint('[ADMIN SOCKET] new_request parse failed: $e'); }
+    });
     _socket!.on('request_updated',(d)=>requestUpdated.value=Map<String,dynamic>.from(d as Map));
     _socket!.on('sla_breach',(d)=>slaBreach.value=Map<String,dynamic>.from(d as Map));
     _socket!.on('b2b_application',(d)=>b2bApplication.value=Map<String,dynamic>.from(d as Map));

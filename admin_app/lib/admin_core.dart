@@ -78,9 +78,9 @@ ThemeData get adminTheme => ThemeData(
   appBarTheme:const AppBarTheme(backgroundColor:AC.primary,elevation:0,centerTitle:true,titleTextStyle:TextStyle(fontFamily:'Cairo',fontSize:17,fontWeight:FontWeight.w700,color:Colors.white),iconTheme:IconThemeData(color:Colors.white,size:22),systemOverlayStyle:SystemUiOverlayStyle(statusBarColor:Colors.transparent,statusBarIconBrightness:Brightness.light)),
   elevatedButtonTheme:ElevatedButtonThemeData(style:ButtonStyle(backgroundColor:WidgetStateProperty.resolveWith((s)=>s.contains(WidgetState.disabled)?AC.divider:AC.primary),foregroundColor:WidgetStateProperty.all(Colors.white),elevation:WidgetStateProperty.all(0),minimumSize:WidgetStateProperty.all(const Size(double.infinity,AD.btnH)),shape:WidgetStateProperty.all(RoundedRectangleBorder(borderRadius:BorderRadius.circular(AD.r12))),textStyle:WidgetStateProperty.all(AT.btn))),
   inputDecorationTheme:InputDecorationTheme(filled:true,fillColor:AC.surface,border:OutlineInputBorder(borderRadius:BorderRadius.circular(AD.r12),borderSide:const BorderSide(color:AC.border)),enabledBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(AD.r12),borderSide:const BorderSide(color:AC.border)),focusedBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(AD.r12),borderSide:const BorderSide(color:AC.primary,width:1.5)),contentPadding:const EdgeInsets.symmetric(horizontal:16,vertical:16)),
-  cardTheme:CardTheme(color:AC.surface,elevation:0,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(AD.r16),side:const BorderSide(color:AC.border,width:0.8)),margin:EdgeInsets.zero),
+  cardTheme:CardThemeData(color:AC.surface,elevation:0,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(AD.r16),side:const BorderSide(color:AC.border,width:0.8)),margin:EdgeInsets.zero),
   dividerTheme:const DividerThemeData(color:AC.divider,thickness:1,space:0),
-  dialogTheme:DialogTheme(backgroundColor:AC.surface,surfaceTintColor:Colors.transparent,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20))),
+  dialogTheme:DialogThemeData(backgroundColor:AC.surface,surfaceTintColor:Colors.transparent,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20))),
   snackBarTheme:SnackBarThemeData(backgroundColor:AC.text,contentTextStyle:AT.body.copyWith(color:Colors.white),behavior:SnackBarBehavior.floating,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(10))),
 );
 
@@ -208,7 +208,7 @@ class SubService {
   final String id,serviceProviderId,name,nameAr,category; final bool isActive;
   final double fixedFee,percentageFee; final double? minAmount,maxAmount;
   const SubService({required this.id,required this.serviceProviderId,required this.name,required this.nameAr,required this.category,required this.isActive,required this.fixedFee,required this.percentageFee,this.minAmount,this.maxAmount});
-  factory SubService.fromJson(Map<String,dynamic> j)=>SubService(id:j['id'] as String,serviceProviderId:j['serviceProviderId'] as String,name:j['name'] as String,nameAr:j['nameAr'] as String,category:j['category'] as String,isActive:(j['isActive'] as bool?)??true,fixedFee:double.tryParse((j['fixedFee']??'0').toString())??0,percentageFee:double.tryParse((j['percentageFee']??'0').toString())??0,minAmount:(j['minAmount'] as num?)?.toDouble(),maxAmount:(j['maxAmount'] as num?)?.toDouble());
+  factory SubService.fromJson(Map<String,dynamic> j)=>SubService(id:j['id'] as String,serviceProviderId:j['serviceProviderId'] as String,name:j['name'] as String,nameAr:j['nameAr'] as String,category:j['category'] as String,isActive:(j['isActive'] as bool?)??true,fixedFee:double.tryParse((j['fixedFee']??'0').toString())??0,percentageFee:double.tryParse((j['percentageFee']??'0').toString())??0,minAmount:j['minAmount']!=null?double.tryParse(j['minAmount'].toString()):null,maxAmount:j['maxAmount']!=null?double.tryParse(j['maxAmount'].toString()):null);
 }
 
 class AdminUser {

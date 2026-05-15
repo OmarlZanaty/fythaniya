@@ -18,6 +18,7 @@ const userRouter    = require('./modules/user_routes');
 const { startJobs } = require('./jobs/jobs');
 
 const app    = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // ── Socket.IO ─────────────────────────────────────────────────────────────────

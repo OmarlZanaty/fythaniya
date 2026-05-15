@@ -67,6 +67,7 @@ class HomeBloc extends Bloc<HomeEvent,HomeState> {
       final results = await Future.wait([UserRepo().getProfile(), ServicesRepo().getCategories(), UserRepo().getTransactions(page:1)]);
       emit(HomeLoaded(user:results[0] as UserModel, categories:results[1] as Map<String,List<ServiceProviderModel>>, recent:(results[2] as PagedResult<TransactionModel>).data.take(5).toList()));
     } on ApiException catch(ex) { emit(HomeError(ex.message)); }
+    catch(ex, st) { emit(HomeError('Home load failed: $ex')); print('[HomeBloc] $ex\n$st'); }
   }
 }
 

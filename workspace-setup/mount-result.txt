@@ -1,0 +1,12 @@
+﻿
+=== fythaniya backend mount (drive-letter + ssh config) ===
+time: 05/15/2026 15:18:38
+sshfs.exe : C:\Program Files\SSHFS-Win\bin\sshfs.exe
+SSH key   : C:\Users\user\.ssh\google_compute_engine
+ssh config: C:\Users\user\.ssh\config  (Host block ensured)
+drive     : Z:
+mounting  : omar_elzanaty_almobarmg@34.79.246.143:/home/omar_elzanaty_almobarmg/fythaniya-api  ->  Z:
+(connecting, please wait up to 20 seconds...)
+
+RESULT: FAILED - mount did not come up. sshfs error output:
+  read: Connection reset by peer

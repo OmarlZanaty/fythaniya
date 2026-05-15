@@ -89,8 +89,8 @@ ThemeData get adminTheme => ThemeData(
 // ═══════════════════════════════════════════════════════════
 class AdminConstants {
   AdminConstants._();
-  static const String baseUrl   = 'https://YOUR_DOMAIN/api/v1';
-  static const String socketUrl = 'https://YOUR_DOMAIN';
+  static const String baseUrl   = 'http://34.79.246.143/api/v1';
+  static const String socketUrl = 'http://34.79.246.143';
   static const String tokenKey  = 'admin_token';
 }
 

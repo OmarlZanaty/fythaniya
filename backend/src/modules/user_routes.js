@@ -1,9 +1,9 @@
 'use strict';
 const router = require('express').Router();
 const { body } = require('express-validator');
-const prisma = require('../../config/database');
-const { apiResponse, paginate, notifyUser, notifyAdmins, emitToAdmins, hashPassword } = require('../../utils/all');
-const { authenticateUser, validate } = require('../../middleware/index');
+const prisma = require('../config/database');
+const { apiResponse, paginate, notifyUser, notifyAdmins, emitToAdmins, hashPassword } = require('../utils/all');
+const { authenticateUser, validate } = require('../middleware/index');
 
 // All routes require user auth
 router.use(authenticateUser);
@@ -45,7 +45,7 @@ router.put('/change-password',
   validate,
   async (req, res, next) => {
     try {
-      const { comparePassword } = require('../../utils/all');
+      const { comparePassword } = require('../utils/all');
       const { currentPassword, newPassword } = req.body;
       const user = await prisma.user.findUnique({ where: { id: req.user.id } });
       const valid = await comparePassword(currentPassword, user.passwordHash);

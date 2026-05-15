@@ -7,19 +7,83 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserType          { B2C B2B }
-enum UserStatus        { ACTIVE SUSPENDED PENDING_KYC BANNED }
-enum AdminRole         { SUPER_ADMIN TRANSACTION_PROCESSOR B2B_MANAGER SUPPORT_AGENT }
-enum RequestStatus     { PENDING ASSIGNED IN_PROGRESS COMPLETED FAILED REFUNDED ESCALATED }
-enum RequestType       { MOBILE_RECHARGE BILL_PAYMENT INTERNET_RECHARGE B2B_PAY_LATER TRANSFER }
-enum TransactionStatus { PENDING SUCCESS FAILED REFUNDED }
-enum ServiceCategory   { TELECOM ELECTRICITY GAS WATER INTERNET INSURANCE GOVERNMENT }
-enum NotifChannel      { PUSH SMS EMAIL IN_APP }
-enum NotifPriority     { LOW MEDIUM HIGH CRITICAL }
-enum PayLaterStatus    { PENDING_APPROVAL ACTIVE OVERDUE SETTLED SUSPENDED REJECTED }
-enum EscalationLevel   { LEVEL_1 LEVEL_2 LEVEL_3 }
-enum B2BRequestStatus  { PENDING APPROVED REJECTED }
-
+enum UserType {
+  B2C
+  B2B
+}
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_KYC
+  BANNED
+}
+enum AdminRole {
+  SUPER_ADMIN
+  TRANSACTION_PROCESSOR
+  B2B_MANAGER
+  SUPPORT_AGENT
+}
+enum RequestStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  REFUNDED
+  ESCALATED
+}
+enum RequestType {
+  MOBILE_RECHARGE
+  BILL_PAYMENT
+  INTERNET_RECHARGE
+  B2B_PAY_LATER
+  TRANSFER
+}
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+enum ServiceCategory {
+  TELECOM
+  ELECTRICITY
+  GAS
+  WATER
+  INTERNET
+  INSURANCE
+  GOVERNMENT
+}
+enum NotifChannel {
+  PUSH
+  SMS
+  EMAIL
+  IN_APP
+}
+enum NotifPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+enum PayLaterStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  OVERDUE
+  SETTLED
+  SUSPENDED
+  REJECTED
+}
+enum EscalationLevel {
+  LEVEL_1
+  LEVEL_2
+  LEVEL_3
+}
+enum B2BRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
 model User {
   id              String     @id @default(uuid())
   phone           String     @unique

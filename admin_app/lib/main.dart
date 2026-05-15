@@ -370,7 +370,7 @@ class _ReqDetailState extends State<RequestDetailScreen> {
           ]),
         ],
         const SizedBox(height:AD.xxl),
-      ]));
+      ])));
 }
 class _Row extends StatelessWidget { final String l,v;final Color?valueColor; const _Row(this.l,this.v,{this.valueColor}); @override Widget build(BuildContext ctx)=>Padding(padding:const EdgeInsets.symmetric(vertical:5),child:Row(children:[Text('$l:',style:AT.cap),const SizedBox(width:8),Expanded(child:Text(v,style:AT.capM.copyWith(color:valueColor??AC.text),textAlign:TextAlign.left))]));}
 

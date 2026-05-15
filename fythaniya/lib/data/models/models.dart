@@ -231,7 +231,7 @@ class VoucherModel {
     this.validUntil, required this.isActive, this.canRedeem=false});
   factory VoucherModel.fromJson(Map<String,dynamic> j) => VoucherModel(
     id: j['id'] as String, code: j['code'] as String,
-    discountPercent: (j['discountPercent'] as num).toDouble(),
+    discountPercent: double.tryParse((j['discountPercent']??'0').toString())??0,
     maxUses: j['maxUses'] as int, usedCount: j['usedCount'] as int,
     pointsCost: j['pointsCost'] as int,
     validUntil: j['validUntil']!=null?DateTime.tryParse(j['validUntil'] as String):null,

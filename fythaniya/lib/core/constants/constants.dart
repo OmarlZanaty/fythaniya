@@ -25,6 +25,8 @@ class AppRoutes {
   static const String txList     = '/transactions';
   static const String notifs     = '/notifications';
   static const String wallet     = '/wallet';
+  static const String walletTopup    = '/wallet/topup';
+  static const String walletTransfer = '/wallet/transfer';
   static const String rewards    = '/rewards';
   static const String profile    = '/profile';
   static const String editProf   = '/profile/edit';

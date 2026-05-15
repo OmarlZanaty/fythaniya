@@ -61,6 +61,8 @@ class _FythaniyaAppState extends State<FythaniyaApp> {
         GoRoute(path: AppRoutes.txList,     builder: (_,__) => const TransactionsScreen()),
         GoRoute(path: AppRoutes.notifs,     builder: (_,__) => const NotificationsScreen()),
         GoRoute(path: AppRoutes.wallet,     builder: (_,__) => const WalletScreen()),
+        GoRoute(path: AppRoutes.walletTopup,    builder: (_,__) => const TopUpScreen()),
+        GoRoute(path: AppRoutes.walletTransfer, builder: (_,__) => const TransferScreen()),
         GoRoute(path: AppRoutes.rewards,    builder: (_,__) => const RewardsScreen()),
         GoRoute(path: AppRoutes.profile,    builder: (_,__) => const ProfileScreen()),
         GoRoute(path: AppRoutes.editProf,   builder: (_,__) => const EditProfileScreen()),

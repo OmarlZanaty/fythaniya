@@ -218,6 +218,24 @@ class UserRepo {
     return res['data'] as Map<String,dynamic>;
   }
 
+  Future<double> walletTopup(double amount) async {
+    final res = await _c.post('/user/wallet/topup', body:{'amount':amount});
+    final d = res['data'] as Map<String,dynamic>;
+    return double.tryParse(d['newBalance'].toString()) ?? 0;
+  }
+
+  Future<Map<String,dynamic>> walletTransfer({required String toPhone, required double amount, String? note}) async {
+    final res = await _c.post('/user/wallet/transfer', body:{
+      'toPhone': toPhone, 'amount': amount,
+      if (note != null && note.isNotEmpty) 'note': note,
+    });
+    final d = res['data'] as Map<String,dynamic>;
+    return {
+      'newBalance': double.tryParse(d['newBalance'].toString()) ?? 0,
+      'recipientName': d['recipientName'] as String?,
+    };
+  }
+
   Future<List<SpendingRecord>> getSpending({int? year}) async {
     final res = await _c.get('/user/spending', params:{'year':year??DateTime.now().year});
     return (res['data'] as List<dynamic>).map((e)=>SpendingRecord.fromJson(e as Map<String,dynamic>)).toList();

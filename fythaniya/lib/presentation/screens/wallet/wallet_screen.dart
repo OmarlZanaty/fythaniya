@@ -62,9 +62,9 @@ class _WalletContent extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: D.md),
           child: Row(children: [
-            _QuickAction(icon: Icons.add_rounded, label: 'شحن', color: AppColors.primary, onTap: () {}),
+            _QuickAction(icon: Icons.add_rounded, label: 'شحن', color: AppColors.primary, onTap: () => context.push(AppRoutes.walletTopup)),
             const SizedBox(width: 12),
-            _QuickAction(icon: Icons.send_rounded, label: 'إرسال', color: AppColors.internet, onTap: () {}),
+            _QuickAction(icon: Icons.send_rounded, label: 'إرسال', color: AppColors.internet, onTap: () => context.push(AppRoutes.walletTransfer)),
             const SizedBox(width: 12),
             _QuickAction(icon: Icons.history_rounded, label: 'السجل', color: AppColors.telecom, onTap: () => context.push(AppRoutes.txList)),
             const SizedBox(width: 12),

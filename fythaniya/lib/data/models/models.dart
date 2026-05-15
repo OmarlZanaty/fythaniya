@@ -59,15 +59,21 @@ class ServiceProviderModel {
     required this.category, this.logoUrl, this.isActive=true,
     this.sortOrder=0, this.commissionRate=0, this.subServices=const[]});
 
-  factory ServiceProviderModel.fromJson(Map<String,dynamic> j) => ServiceProviderModel(
-    id: j['id'] as String, name: j['name'] as String,
-    displayName: j['displayName'] as String? ?? j['name'] as String,
-    category: j['category'] as String, logoUrl: j['logoUrl'] as String?,
-    isActive: (j['isActive'] as bool?) ?? true,
-    sortOrder: (j['sortOrder'] as int?) ?? 0,
-    commissionRate: double.tryParse((j['commissionRate'] ?? '0').toString()) ?? 0,
-    subServices: (j['subServices'] as List<dynamic>?)?.map((s)=>SubServiceModel.fromJson(s as Map<String,dynamic>)).toList() ?? [],
-  );
+  factory ServiceProviderModel.fromJson(Map<String,dynamic> j) {
+    final id = j['id'] as String;
+    // Some endpoints narrow the select and omit `name` / `displayName` — fall back gracefully.
+    final name = (j['name'] as String?) ?? id;
+    final displayName = (j['displayName'] as String?) ?? name;
+    return ServiceProviderModel(
+      id: id, name: name, displayName: displayName,
+      category: j['category'] as String? ?? 'OTHER',
+      logoUrl: j['logoUrl'] as String?,
+      isActive: (j['isActive'] as bool?) ?? true,
+      sortOrder: (j['sortOrder'] as int?) ?? 0,
+      commissionRate: double.tryParse((j['commissionRate'] ?? '0').toString()) ?? 0,
+      subServices: (j['subServices'] as List<dynamic>?)?.map((s)=>SubServiceModel.fromJson(s as Map<String,dynamic>)).toList() ?? [],
+    );
+  }
 }
 
 class SubServiceModel {
@@ -87,16 +93,29 @@ class SubServiceModel {
 
   factory SubServiceModel.fromJson(Map<String,dynamic> j) {
     List<int> qa = [];
-    try { final raw = j['quickAmounts']; if (raw is String && raw.isNotEmpty) { final parsed = raw.replaceAll('[','').replaceAll(']','').split(','); qa = parsed.map((e)=>int.tryParse(e.trim())??0).where((e)=>e>0).toList(); } } catch(_) {}
+    try {
+      final raw = j['quickAmounts'];
+      if (raw is String && raw.isNotEmpty) {
+        final parsed = raw.replaceAll('[','').replaceAll(']','').split(',');
+        qa = parsed.map((e)=>int.tryParse(e.trim())??0).where((e)=>e>0).toList();
+      }
+    } catch (e) { /* swallow — quickAmounts is best-effort */ }
+    final id = j['id'] as String;
+    final nameAr = (j['nameAr'] as String?) ?? '';
+    // Some endpoints narrow the select and only ship {id, nameAr}. Fall back so we never crash.
     return SubServiceModel(
-      id: j['id'] as String, serviceProviderId: j['serviceProviderId'] as String,
-      name: j['name'] as String, nameAr: j['nameAr'] as String,
-      category: j['category'] as String, description: j['description'] as String?,
+      id: id,
+      serviceProviderId: (j['serviceProviderId'] as String?) ?? '',
+      name: (j['name'] as String?) ?? nameAr,
+      nameAr: nameAr,
+      category: (j['category'] as String?) ?? 'OTHER',
+      description: j['description'] as String?,
       minAmount: j['minAmount']!=null ? double.tryParse(j['minAmount'].toString()) : null,
       maxAmount: j['maxAmount']!=null ? double.tryParse(j['maxAmount'].toString()) : null,
       fixedFee: double.tryParse((j['fixedFee']??'0').toString())??0,
       percentageFee: double.tryParse((j['percentageFee']??'0').toString())??0,
-      quickAmounts: qa, isActive: (j['isActive'] as bool?)??true,
+      quickAmounts: qa,
+      isActive: (j['isActive'] as bool?)??true,
       sortOrder: (j['sortOrder'] as int?)??0,
     );
   }

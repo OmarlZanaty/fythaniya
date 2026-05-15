@@ -161,9 +161,10 @@ router.get('/transactions', async (req, res, next) => {
         include: {
           request: {
             select: {
-              id: true, type: true, status: true, accountNumber: true, phoneNumber: true,
-              serviceProvider: { select: { id: true, displayName: true, category: true } },
-              subService: { select: { id: true, nameAr: true } },
+              id: true, type: true, status: true, amount: true, fee: true, totalAmount: true,
+              accountNumber: true, phoneNumber: true, createdAt: true,
+              serviceProvider: { select: { id: true, name: true, displayName: true, category: true } },
+              subService: { select: { id: true, name: true, nameAr: true, category: true, serviceProviderId: true } },
             },
           },
         },

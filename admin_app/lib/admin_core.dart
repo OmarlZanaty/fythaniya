@@ -107,6 +107,7 @@ class AdminRoutes {
   static const String userDetail = '/users/:id';
   static const String notifs     = '/notifications';
   static const String settings   = '/settings';
+  static const String reports    = '/reports';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -130,7 +131,7 @@ class AdminLoginResponse {
 class RequestItem {
   final String id,type,status;
   final double amount,fee,totalAmount;
-  final String? accountNumber,phoneNumber,adminNote,externalRef;
+  final String? accountNumber,phoneNumber,adminNote,externalRef,proofImageUrl,paymentMethod;
   final String? processorId;
   final DateTime createdAt;
   final DateTime? completedAt,slaDeadline;
@@ -139,7 +140,7 @@ class RequestItem {
 
   const RequestItem({required this.id,required this.type,required this.status,
     required this.amount,required this.fee,required this.totalAmount,
-    this.accountNumber,this.phoneNumber,this.adminNote,this.externalRef,
+    this.accountNumber,this.phoneNumber,this.adminNote,this.externalRef,this.proofImageUrl,this.paymentMethod,
     this.processorId,required this.createdAt,this.completedAt,this.slaDeadline,
     this.user,this.serviceProvider,this.subService,this.processor,this.slaBreached=false});
 
@@ -150,6 +151,7 @@ class RequestItem {
     totalAmount:double.tryParse((j['totalAmount']??'0').toString())??0,
     accountNumber:j['accountNumber'] as String?,phoneNumber:j['phoneNumber'] as String?,
     adminNote:j['adminNote'] as String?,externalRef:j['externalRef'] as String?,
+    proofImageUrl:j['proofImageUrl'] as String?,paymentMethod:j['paymentMethod'] as String?,
     processorId:j['processorId'] as String?,
     createdAt:DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now(),
     completedAt:j['completedAt']!=null?DateTime.tryParse(j['completedAt'] as String):null,

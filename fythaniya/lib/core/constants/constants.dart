@@ -35,6 +35,7 @@ class AppRoutes {
   static const String b2bDash    = '/b2b/dashboard';
   static const String b2bRequest = '/b2b/request';
   static const String b2bInvoices= '/b2b/invoices';
+  static const String payLater   = '/pay-later';
 }
 
 class S {
@@ -124,9 +125,9 @@ class S {
   static const String privacy     = 'سياسة الخصوصية';
   static const String appVersion  = 'إصدار التطبيق';
   static const String logoutConfirm='هل تريد تسجيل الخروج؟';
-  static const String b2bTitle    = 'حساب الأعمال B2B';
-  static const String b2bApply    = 'التقديم على حساب B2B';
-  static const String b2bDash     = 'لوحة B2B';
+  static const String b2bTitle    = 'حساب شركات';
+  static const String b2bApply    = 'التقديم على حساب شركات';
+  static const String b2bDash     = 'لوحة الشركات';
   static const String payLater    = 'ادفع لاحقاً';
   static const String creditLimit = 'الحد الائتماني';
   static const String usedCredit  = 'الائتمان المستخدم';

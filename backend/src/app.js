@@ -72,6 +72,13 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
 
+// ── Static uploads (proof images, service icons) ─────────────────────────────
+const path = require('path');
+const { UPLOAD_ROOT } = require('./middleware/upload');
+app.use('/uploads', express.static(UPLOAD_ROOT, {
+  maxAge: '7d', fallthrough: true, immutable: true,
+}));
+
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get('/api/v1/health', (req, res) => res.json({
   success: true, status: 'ok', env: config.nodeEnv,

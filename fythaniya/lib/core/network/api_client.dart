@@ -183,12 +183,15 @@ class UserRepo {
   }
 
   Future<RequestModel> createRequest({required String serviceProviderId, String? subServiceId,
-    required String type, required double amount, String? accountNumber, String? phoneNumber}) async {
+    required String type, required double amount, String? accountNumber, String? phoneNumber,
+    String? paymentMethod, String? proofImageUrl}) async {
     final res = await _c.post('/user/requests', body:{
       'serviceProviderId':serviceProviderId, if(subServiceId!=null)'subServiceId':subServiceId,
       'type':type, 'amount':amount,
       if(accountNumber!=null)'accountNumber':accountNumber,
       if(phoneNumber!=null)'phoneNumber':phoneNumber,
+      if(paymentMethod!=null)'paymentMethod':paymentMethod,
+      if(proofImageUrl!=null)'proofImageUrl':proofImageUrl,
     });
     return RequestModel.fromJson(res['data'] as Map<String,dynamic>);
   }
@@ -222,10 +225,29 @@ class UserRepo {
     return res['data'] as Map<String,dynamic>;
   }
 
-  Future<double> walletTopup(double amount) async {
-    final res = await _c.post('/user/wallet/topup', body:{'amount':amount});
+  // Wallet topup is now a REQUEST that requires admin approval after the user uploads payment proof.
+  // Returns the new request id so the client can immediately upload a proof image.
+  Future<String> walletTopupRequest({required double amount, String paymentMethod='BANK_TRANSFER'}) async {
+    final res = await _c.post('/user/wallet/topup', body:{'amount':amount,'paymentMethod':paymentMethod});
     final d = res['data'] as Map<String,dynamic>;
-    return double.tryParse(d['newBalance'].toString()) ?? 0;
+    return d['requestId'] as String;
+  }
+
+  // Request activation of pay-later (admin must approve).
+  Future<String> requestPayLaterActivation() async {
+    final res = await _c.post('/user/pay-later/activate');
+    final d = res['data'] as Map<String,dynamic>;
+    return d['requestId'] as String;
+  }
+
+  // Upload payment proof for a request. Returns the public image URL.
+  Future<String> uploadProof(String requestId, String filePath) async {
+    final form = FormData.fromMap({
+      'image': await MultipartFile.fromFile(filePath, filename: filePath.split(RegExp(r'[\\/]')).last),
+    });
+    final r = await ApiClient.instance._dio.post('/user/requests/$requestId/proof', data: form);
+    final d = (r.data as Map<String,dynamic>)['data'] as Map<String,dynamic>;
+    return d['proofImageUrl'] as String;
   }
 
   Future<Map<String,dynamic>> walletTransfer({required String toPhone, required double amount, String? note}) async {

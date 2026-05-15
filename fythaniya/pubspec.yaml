@@ -30,32 +30,24 @@ dependencies:
   flutter_local_notifications: ^17.0.0
   package_info_plus: ^8.0.0
   url_launcher: ^6.2.6
+  image_picker: ^1.0.7
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
   generate: true
-  # NOTE: assets and the Cairo font family were removed because the
-  # assets/ folder and the .ttf files do not exist in the project yet.
-  # Re-add these sections once the real asset/font files are in place.
-  # assets:
-  #   - assets/images/
-  #   - assets/icons/
-  #   - assets/lottie/
-  # fonts:
-  #   - family: Cairo
-  #     fonts:
-  #       - asset: assets/fonts/Cairo-Regular.ttf
-  #         weight: 400
-  #       - asset: assets/fonts/Cairo-Medium.ttf
-  #         weight: 500
-  #       - asset: assets/fonts/Cairo-SemiBold.ttf
-  #         weight: 600
-  #       - asset: assets/fonts/Cairo-Bold.ttf
-  #         weight: 700
-  #       - asset: assets/fonts/Cairo-ExtraBold.ttf
-  #         weight: 800
+  assets:
+    - assets/images/
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: false
+  image_path: "assets/images/logo.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/logo.png"

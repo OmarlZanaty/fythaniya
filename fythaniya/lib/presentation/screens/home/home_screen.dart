@@ -68,10 +68,12 @@ class _HomeContent extends StatelessWidget {
     _Svc(S.gas,        'GAS',          Icons.local_fire_department_rounded,  AppColors.gas,         'bill_gas'),
     _Svc(S.water,      'WATER',        Icons.water_drop_rounded,            AppColors.water,       'bill_water'),
     _Svc(S.internet,   'INTERNET',     Icons.wifi_rounded,                  AppColors.internet,    'bill_internet'),
-    _Svc('حساب الأعمال','B2B',         Icons.business_rounded,              AppColors.b2b,         'b2b'),
+    _Svc('شركات',      'B2B',          Icons.business_rounded,              AppColors.b2b,         'b2b'),
+    _Svc('فودافون كاش','VC',           Icons.account_balance_wallet_rounded,AppColors.telecom,     'vodafone_cash'),
     _Svc('مكافآت',     'REWARDS',      Icons.stars_rounded,                 AppColors.accent,      'rewards'),
     _Svc(S.notifTitle, 'NOTIF',        Icons.notifications_rounded,         AppColors.info,        'notifs'),
     _Svc('محفظتي',     'WALLET',       Icons.account_balance_wallet_rounded,AppColors.primary,     'wallet'),
+    _Svc('الدفع الآجل','PAY_LATER',    Icons.payments_rounded,              AppColors.accent,      'pay_later'),
   ];
 
   @override Widget build(BuildContext context) => RefreshIndicator(
@@ -118,8 +120,8 @@ class _HomeContent extends StatelessWidget {
             child:Row(children:[
               const Icon(Icons.business_rounded,color:Colors.white,size:28),const SizedBox(width:12),
               Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                Text('حساب الأعمال',style:TS.bodyM.copyWith(color:Colors.white)),
-                Text('اضغط لعرض لوحة B2B',style:TS.cap.copyWith(color:Colors.white70)),
+                Text('حساب الشركات',style:TS.bodyM.copyWith(color:Colors.white)),
+                Text('اضغط لعرض لوحة الشركات',style:TS.cap.copyWith(color:Colors.white70)),
               ])),
               const Icon(Icons.arrow_forward_ios_rounded,color:Colors.white,size:16),
             ])))),
@@ -135,19 +137,30 @@ class _HomeContent extends StatelessWidget {
             itemCount:_services.length,
             itemBuilder:(_,i){
               final s=_services[i];
+              final eligible = state.user.payLaterEligible;
+              final gated = (s.route=='vodafone_cash' || s.route=='pay_later') && !eligible;
               return GestureDetector(onTap:(){
                 final r=s.route;
+                if (r=='vodafone_cash' && !eligible) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('الخدمة غير متاحة لحسابك. يرجى تفعيل الدفع الآجل أولاً.'),
+                    backgroundColor: AppColors.error,
+                  ));
+                  return;
+                }
+                if (r=='vodafone_cash') { context.push(AppRoutes.bill, extra:'TELECOM'); return; }
+                if (r=='pay_later') { context.push(AppRoutes.payLater); return; }
                 if(r=='recharge') context.push(AppRoutes.recharge);
                 else if(r=='wallet') context.push(AppRoutes.wallet);
                 else if(r=='rewards') context.push(AppRoutes.rewards);
                 else if(r=='notifs') context.push(AppRoutes.notifs);
                 else if(r=='b2b') context.push(state.user.isB2B?AppRoutes.b2bDash:AppRoutes.b2bApply);
                 else context.push(AppRoutes.bill, extra:s.cat);
-              },child:Column(mainAxisSize:MainAxisSize.min,children:[
+              },child:Opacity(opacity: gated ? 0.4 : 1.0, child: Column(mainAxisSize:MainAxisSize.min,children:[
                 Container(width:56,height:56,decoration:BoxDecoration(color:s.color.withOpacity(0.1),borderRadius:BorderRadius.circular(14),border:Border.all(color:s.color.withOpacity(0.2))),child:Icon(s.icon,color:s.color,size:26)),
                 const SizedBox(height:5),
                 Text(s.label,style:TS.cap.copyWith(fontSize:10),textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis),
-              ]));
+              ])));
             })),
 
         const SizedBox(height:D.lg),

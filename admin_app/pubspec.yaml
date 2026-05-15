@@ -27,11 +27,14 @@ dependencies:
   intl: ^0.20.2
   percent_indicator: ^4.2.3
   badges: ^3.1.2
+  image_picker: ^1.0.7
+  cached_network_image: ^3.3.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
@@ -51,3 +54,11 @@ flutter:
           weight: 700
         - asset: assets/fonts/Cairo-ExtraBold.ttf
           weight: 800
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: false
+  image_path: "assets/images/logo.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#0E7490"
+  adaptive_icon_foreground: "assets/images/logo.png"

@@ -12,7 +12,7 @@ Widget _authScaffold({required Widget child}) => Scaffold(
   backgroundColor: AppColors.primary,
   body: Column(children:[
     SizedBox(height: MediaQuery.of(GlobalKey<NavigatorState>().currentContext!).padding.top + 40),
-    const Center(child:Icon(Icons.bolt_rounded,color:Colors.white,size:48)),
+    Center(child: SizedBox(height:64, child: Image.asset('assets/images/logo.png', fit: BoxFit.contain))),
     const SizedBox(height:8),
     Expanded(child:Container(
       decoration:const BoxDecoration(color:AppColors.bg,borderRadius:BorderRadius.vertical(top:Radius.circular(28))),
@@ -26,7 +26,7 @@ class _AuthBase extends StatelessWidget {
     backgroundColor: AppColors.primary,
     body: SafeArea(child:Column(children:[
       Padding(padding:const EdgeInsets.symmetric(vertical:24),child:Column(children:[
-        const Icon(Icons.bolt_rounded,color:Colors.white,size:48),
+        SizedBox(height:60, child: Image.asset('assets/images/logo.png', fit: BoxFit.contain)),
         const SizedBox(height:8),
         Text(AppConstants.appName,style:TS.h2.copyWith(color:Colors.white)),
       ])),

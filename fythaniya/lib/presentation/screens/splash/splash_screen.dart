@@ -35,8 +35,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     child: Scaffold(
       backgroundColor: AppColors.primary,
       body: Center(child: FadeTransition(opacity:_fade, child:ScaleTransition(scale:_scale,child:Column(mainAxisSize:MainAxisSize.min,children:[
-        Container(width:90,height:90,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(24),boxShadow:[BoxShadow(color:Colors.black.withOpacity(0.2),blurRadius:24,spreadRadius:4)]),
-          child:Icon(Icons.bolt_rounded,color:AppColors.primary,size:52)),
+        Container(width:130,height:130,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(28),boxShadow:[BoxShadow(color:Colors.black.withOpacity(0.2),blurRadius:24,spreadRadius:4)]),
+          padding: const EdgeInsets.all(14),
+          child: ClipRRect(borderRadius: BorderRadius.circular(18), child: Image.asset('assets/images/logo.png', fit: BoxFit.contain))),
         const SizedBox(height:24),
         Text(AppConstants.appName,style:TS.amount.copyWith(color:Colors.white,fontSize:36)),
         const SizedBox(height:8),Text(AppConstants.appTagline,style:TS.body.copyWith(color:Colors.white70)),

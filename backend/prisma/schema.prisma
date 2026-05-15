@@ -23,6 +23,8 @@ model User {
   refreshTokenExp    DateTime?
   pointsBalance      Int                  @default(0)
   walletBalance      Decimal              @default(0) @db.Decimal(12, 2)
+  payLaterEligible   Boolean              @default(false)
+  payLaterApprovedAt DateTime?
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   lastLoginAt        DateTime?
@@ -83,12 +85,14 @@ model SubService {
   nameAr            String
   description       String?
   category          ServiceCategory
+  imageUrl          String?
   minAmount         Decimal?        @db.Decimal(10, 2)
   maxAmount         Decimal?        @db.Decimal(10, 2)
   fixedFee          Decimal         @default(0) @db.Decimal(8, 2)
   percentageFee     Decimal         @default(0) @db.Decimal(5, 4)
   quickAmounts      String?
   isActive          Boolean         @default(true)
+  requiresPayLater  Boolean         @default(false)
   sortOrder         Int             @default(0)
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
@@ -111,6 +115,8 @@ model Request {
   accountNumber     String?
   phoneNumber       String?
   metadata          String?
+  proofImageUrl     String?
+  paymentMethod     String?
   processorId       String?
   adminNote         String?
   externalRef       String?
@@ -403,6 +409,9 @@ enum RequestType {
   INTERNET_RECHARGE
   B2B_PAY_LATER
   TRANSFER
+  WALLET_TOPUP
+  PAY_LATER_ACTIVATION
+  VODAFONE_CASH_DEPOSIT
 }
 
 enum TransactionStatus {

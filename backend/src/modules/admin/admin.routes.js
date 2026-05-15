@@ -151,31 +151,43 @@ router.put('/requests/:id/complete', requireRole('TRANSACTION_PROCESSOR','B2B_MA
       await prisma.$transaction(async (tx) => {
         await tx.request.update({
           where: { id: r.id },
-          data: { status: 'COMPLETED', completedAt: new Date(), externalRef: externalRef || null, adminNote: adminNote || null },
+          data: { status: 'COMPLETED', completedAt: new Date(), externalRef: externalRef || null, adminNote: adminNote || null, processorId: req.admin.id },
         });
-        await tx.transaction.create({
-          data: {
-            userId: r.userId, requestId: r.id,
-            serviceProviderId: r.serviceProviderId,
-            amount: r.amount, fee: r.fee, totalAmount: r.totalAmount,
-            status: 'SUCCESS', paymentMethod: 'WALLET',
-            externalRef: externalRef || null,
-          },
-        });
-        // Reward points: 1 point per 10 EGP
-        const pts = Math.floor(Number(r.amount) / 10);
-        if (pts > 0) {
-          await tx.user.update({ where: { id: r.userId }, data: { pointsBalance: { increment: pts } } });
-          await tx.rewardTransaction.create({ data: { userId: r.userId, points: pts, isEarned: true, reason: 'مكافأة معاملة', referenceId: r.id } });
-        }
-        // Spending record — provider already loaded above, no need to re-query
-        if (r.serviceProvider) {
-          const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
-          await tx.spendingRecord.upsert({
-            where: { userId_category_month_year: { userId: r.userId, category: r.serviceProvider.category, month: monthKey, year: new Date().getFullYear() } },
-            update: { amount: { increment: Number(r.amount) }, count: { increment: 1 } },
-            create: { userId: r.userId, category: r.serviceProvider.category, month: monthKey, year: new Date().getFullYear(), amount: r.amount, count: 1 },
+
+        // Side-effects branch by request type
+        if (r.type === 'WALLET_TOPUP') {
+          // Credit wallet only on approval; record TOPUP transaction
+          await tx.user.update({ where: { id: r.userId }, data: { walletBalance: { increment: Number(r.amount) } } });
+          await tx.transaction.create({
+            data: { userId: r.userId, requestId: r.id, amount: r.amount, fee: 0, totalAmount: r.amount,
+              status: 'SUCCESS', paymentMethod: r.paymentMethod || 'TOPUP', externalRef: externalRef || null },
           });
+        } else if (r.type === 'PAY_LATER_ACTIVATION') {
+          // Flip the eligibility flag
+          await tx.user.update({ where: { id: r.userId }, data: { payLaterEligible: true, payLaterApprovedAt: new Date() } });
+          // No financial transaction row needed
+        } else {
+          // Regular service request — create the service-pay transaction
+          await tx.transaction.create({
+            data: { userId: r.userId, requestId: r.id, serviceProviderId: r.serviceProviderId,
+              amount: r.amount, fee: r.fee, totalAmount: r.totalAmount,
+              status: 'SUCCESS', paymentMethod: 'WALLET', externalRef: externalRef || null },
+          });
+          // Reward points: 1 point per 10 EGP
+          const pts = Math.floor(Number(r.amount) / 10);
+          if (pts > 0) {
+            await tx.user.update({ where: { id: r.userId }, data: { pointsBalance: { increment: pts } } });
+            await tx.rewardTransaction.create({ data: { userId: r.userId, points: pts, isEarned: true, reason: 'مكافأة معاملة', referenceId: r.id } });
+          }
+          // Spending record
+          if (r.serviceProvider) {
+            const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+            await tx.spendingRecord.upsert({
+              where: { userId_category_month_year: { userId: r.userId, category: r.serviceProvider.category, month: monthKey, year: new Date().getFullYear() } },
+              update: { amount: { increment: Number(r.amount) }, count: { increment: 1 } },
+              create: { userId: r.userId, category: r.serviceProvider.category, month: monthKey, year: new Date().getFullYear(), amount: r.amount, count: 1 },
+            });
+          }
         }
       });
 
@@ -183,7 +195,13 @@ router.put('/requests/:id/complete', requireRole('TRANSACTION_PROCESSOR','B2B_MA
       emitToAdmins(io, 'request_updated', { requestId: r.id, status: 'COMPLETED' });
       emitToUser(io, r.userId, 'request_completed', { requestId: r.id, status: 'COMPLETED' });
 
-      await notifyUser(r.userId, '✅ تم تنفيذ طلبك', `تم إتمام طلبك بنجاح${externalRef ? '. رقم المرجع: ' + externalRef : ''}`, 'HIGH', { requestId: r.id });
+      const successTitle = r.type === 'WALLET_TOPUP' ? '💰 تم شحن محفظتك'
+        : r.type === 'PAY_LATER_ACTIVATION' ? '✅ تم تفعيل الدفع الآجل'
+        : '✅ تم تنفيذ طلبك';
+      const successBody = r.type === 'WALLET_TOPUP' ? `تم إضافة ${r.amount} ج.م إلى محفظتك`
+        : r.type === 'PAY_LATER_ACTIVATION' ? 'يمكنك الآن استخدام خدمة الدفع الآجل'
+        : `تم إتمام طلبك بنجاح${externalRef ? '. رقم المرجع: ' + externalRef : ''}`;
+      await notifyUser(r.userId, successTitle, successBody, 'HIGH', { requestId: r.id });
 
       await prisma.auditLog.create({ data: { adminId: req.admin.id, requestId: r.id, action: 'COMPLETE', entity: 'request', entityId: r.id, details: externalRef } });
       return apiResponse.success(res, null, 'تم إتمام الطلب بنجاح');
@@ -232,35 +250,8 @@ router.put('/requests/:id/fail', requireRole('TRANSACTION_PROCESSOR','B2B_MANAGE
   }
 );
 
-// Refund request 💰
-router.put('/requests/:id/refund', requireRole('SUPER_ADMIN','B2B_MANAGER'),
-  async (req, res, next) => {
-    try {
-      const { reason } = req.body;
-      const r = await prisma.request.findUnique({ where: { id: req.params.id } });
-      if (!r) return apiResponse.error(res, 'Not found', 404);
-      if (r.status === 'REFUNDED') return apiResponse.error(res, 'تم استرداد هذا الطلب بالفعل', 409);
-      if (!['COMPLETED','FAILED'].includes(r.status)) return apiResponse.error(res, 'لا يمكن استرداد طلب لم يُنفذ بعد', 400);
-      await prisma.request.update({ where: { id: r.id }, data: { status: 'REFUNDED', adminNote: reason || 'Refunded by admin' } });
-      await notifyUser(r.userId, '💰 تم استرداد مبلغك', `تم استرداد ${r.totalAmount} ج.م إلى حسابك`, 'HIGH');
-      await prisma.auditLog.create({ data: { adminId: req.admin.id, requestId: r.id, action: 'REFUND', entity: 'request', entityId: r.id } });
-      return apiResponse.success(res, null, 'تم الاسترداد');
-    } catch (err) { next(err); }
-  }
-);
-
-// Escalate request ⚠️
-router.put('/requests/:id/escalate', async (req, res, next) => {
-  try {
-    const { reason, level } = req.body;
-    const r = await prisma.request.findUnique({ where: { id: req.params.id } });
-    if (!r) return apiResponse.error(res, 'Not found', 404);
-    await prisma.escalation.create({ data: { requestId: r.id, level: level || 'LEVEL_1', reason: reason || 'Manual escalation', escalatedBy: req.admin.id } });
-    await prisma.request.update({ where: { id: r.id }, data: { status: 'ESCALATED' } });
-    await notifyAdmins(`⚠️ تصعيد طلب — ${level || 'LEVEL_1'}`, `الطلب #${r.id.slice(0,8)} تم تصعيده. السبب: ${reason}`, 'CRITICAL', r.id);
-    return apiResponse.success(res, null, 'تم التصعيد');
-  } catch (err) { next(err); }
-});
+// Refund and Escalate endpoints removed — admins now only Approve (complete) or Reject (fail).
+// Auto-escalation still runs via the SLA cron job (jobs.js) for monitoring purposes.
 
 // Add admin note
 router.put('/requests/:id/note', requireRole('TRANSACTION_PROCESSOR','B2B_MANAGER','SUPER_ADMIN'), async (req, res, next) => {
@@ -457,6 +448,85 @@ router.get('/analytics/overview', async (req, res, next) => {
     ]);
 
     return apiResponse.success(res, { byStatus, byType, revenueByDay });
+  } catch (err) { next(err); }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  REPORTS
+// ═══════════════════════════════════════════════════════════
+
+function rangeFromQuery(q) {
+  const to = q.to ? new Date(q.to) : new Date();
+  const from = q.from ? new Date(q.from) : new Date(to.getTime() - 30 * 86400000);
+  return { from, to };
+}
+
+// Aggregate transactions over a period: counts + sums by type and by status
+router.get('/reports/transactions', async (req, res, next) => {
+  try {
+    const { from, to } = rangeFromQuery(req.query);
+    const where = { createdAt: { gte: from, lte: to } };
+    const [byStatus, byMethod, totalsRaw] = await Promise.all([
+      prisma.transaction.groupBy({ by: ['status'], where, _count: { _all: true }, _sum: { totalAmount: true } }),
+      prisma.transaction.groupBy({ by: ['paymentMethod'], where, _count: { _all: true }, _sum: { totalAmount: true } }),
+      prisma.transaction.aggregate({ where, _count: { _all: true }, _sum: { totalAmount: true, fee: true } }),
+    ]);
+    return apiResponse.success(res, {
+      from, to,
+      totals: { count: totalsRaw._count._all, totalAmount: totalsRaw._sum.totalAmount, totalFee: totalsRaw._sum.fee },
+      byStatus, byMethod,
+    });
+  } catch (err) { next(err); }
+});
+
+// Pay-later report: per-account outstanding/active/overdue + per-invoice listing
+router.get('/reports/pay-later', requireRole('SUPER_ADMIN','B2B_MANAGER'), async (req, res, next) => {
+  try {
+    const status = req.query.status; // ACTIVE | OVERDUE | SETTLED
+    const where = status ? { status } : {};
+    const [perInvoice, summary] = await Promise.all([
+      prisma.b2BPayLater.findMany({
+        where, orderBy: { dueDate: 'asc' }, take: 200,
+        include: { b2bAccount: { include: { user: { select: { id: true, phone: true, fullName: true } } } }, request: { select: { id: true, type: true } } },
+      }),
+      prisma.b2BPayLater.groupBy({ by: ['status'], _count: { _all: true }, _sum: { amount: true } }),
+    ]);
+    return apiResponse.success(res, { invoices: perInvoice, summary });
+  } catch (err) { next(err); }
+});
+
+// Mark a pay-later invoice as settled (admin overrides — useful when user pays offline)
+router.put('/reports/pay-later/:id/mark-settled', requireRole('SUPER_ADMIN','B2B_MANAGER'), async (req, res, next) => {
+  try {
+    const pl = await prisma.b2BPayLater.findUnique({ where: { id: req.params.id }, include: { b2bAccount: true } });
+    if (!pl) return apiResponse.error(res, 'Not found', 404);
+    if (pl.status === 'SETTLED') return apiResponse.error(res, 'مسددة بالفعل', 409);
+    await prisma.$transaction([
+      prisma.b2BPayLater.update({ where: { id: pl.id }, data: { status: 'SETTLED', settledAt: new Date() } }),
+      prisma.b2BAccount.update({ where: { id: pl.b2bAccountId }, data: { usedCredit: { decrement: Number(pl.amount) } } }),
+      prisma.auditLog.create({ data: { adminId: req.admin.id, action: 'MARK_SETTLED', entity: 'b2b_pay_later', entityId: pl.id } }),
+    ]);
+    return apiResponse.success(res, null, 'تم تسجيل السداد');
+  } catch (err) { next(err); }
+});
+
+// User payment history (for reports drill-down)
+router.get('/reports/user/:id/history', async (req, res, next) => {
+  try {
+    const { from, to } = rangeFromQuery(req.query);
+    const userId = req.params.id;
+    const [requests, transactions] = await Promise.all([
+      prisma.request.findMany({
+        where: { userId, createdAt: { gte: from, lte: to } },
+        orderBy: { createdAt: 'desc' }, take: 200,
+        include: { serviceProvider: { select: { id: true, displayName: true, category: true } }, subService: { select: { id: true, nameAr: true } } },
+      }),
+      prisma.transaction.findMany({
+        where: { userId, createdAt: { gte: from, lte: to } },
+        orderBy: { createdAt: 'desc' }, take: 200,
+      }),
+    ]);
+    return apiResponse.success(res, { from, to, requests, transactions });
   } catch (err) { next(err); }
 });
 

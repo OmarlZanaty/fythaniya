@@ -37,6 +37,7 @@ async function main() {
     { name:'cairo_water', displayName:'مياه القاهرة',        category:'WATER',       sortOrder:8, commissionRate:0.01  },
     { name:'we_internet', displayName:'وي للإنترنت',         category:'INTERNET',    sortOrder:9, commissionRate:0.02  },
     { name:'te_data',     displayName:'تي إي داتا',          category:'INTERNET',    sortOrder:10,commissionRate:0.02  },
+    { name:'vodafone_cash',displayName:'فودافون كاش',         category:'TELECOM',     sortOrder:11,commissionRate:0.02  },
   ];
 
   const provMap = {};
@@ -78,6 +79,8 @@ async function main() {
     { providerId:'we_internet',name:'WE Internet Bill',nameAr:'فاتورة وي إنترنت',category:'INTERNET',    min:50, max:5000, fee:3,   pct:0,    qa:[100,200,500,1000] },
     { providerId:'we_internet',name:'WE Internet Data',nameAr:'باقة وي إنترنت',  category:'INTERNET',    min:59, max:2000, fee:2,   pct:0,    qa:[59,119,478,1852] },
     { providerId:'te_data',    name:'TE Data Bill',    nameAr:'فاتورة تي إي داتا',category:'INTERNET',   min:50, max:5000, fee:3,   pct:0,    qa:[100,200,500,1000] },
+    // Vodafone Cash (requires Pay-Later activation)
+    { providerId:'vodafone_cash', name:'Vodafone Cash Deposit', nameAr:'إيداع فودافون كاش', category:'TELECOM', min:50, max:5000, fee:0, pct:0.01, qa:[100,200,500,1000,2000], requiresPayLater:true },
   ];
 
   for (const s of subServices) {
@@ -88,6 +91,7 @@ async function main() {
         minAmount: s.min, maxAmount: s.max,
         fixedFee: s.fee, percentageFee: s.pct,
         quickAmounts: JSON.stringify(s.qa),
+        requiresPayLater: s.requiresPayLater || false,
         isActive: true, sortOrder: 0,
       },
     });

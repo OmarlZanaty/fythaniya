@@ -6,11 +6,15 @@ class UserModel {
   final bool kycVerified;
   final int pointsBalance;
   final double walletBalance;
+  final bool payLaterEligible;
+  final bool payLaterPending;
+  final String? payLaterPendingRequestId;
   final DateTime? createdAt, lastLoginAt;
 
   const UserModel({required this.id, required this.phone, required this.fullName,
     this.email, this.deviceToken, required this.type, required this.status,
     required this.kycVerified, required this.pointsBalance, required this.walletBalance,
+    this.payLaterEligible = false, this.payLaterPending = false, this.payLaterPendingRequestId,
     this.createdAt, this.lastLoginAt});
 
   factory UserModel.fromJson(Map<String,dynamic> j) => UserModel(
@@ -21,14 +25,17 @@ class UserModel {
     kycVerified: (j['kycVerified'] as bool?) ?? true,
     pointsBalance: (j['pointsBalance'] as int?) ?? 0,
     walletBalance: double.tryParse(j['walletBalance'].toString()) ?? 0.0,
+    payLaterEligible: (j['payLaterEligible'] as bool?) ?? false,
+    payLaterPending: (j['payLaterPending'] as bool?) ?? false,
+    payLaterPendingRequestId: j['payLaterPendingRequestId'] as String?,
     createdAt: j['createdAt'] != null ? DateTime.tryParse(j['createdAt'] as String) : null,
     lastLoginAt: j['lastLoginAt'] != null ? DateTime.tryParse(j['lastLoginAt'] as String) : null,
   );
 
-  Map<String,dynamic> toJson() => {'id':id,'phone':phone,'fullName':fullName,'email':email,'type':type,'status':status,'kycVerified':kycVerified,'pointsBalance':pointsBalance,'walletBalance':walletBalance};
+  Map<String,dynamic> toJson() => {'id':id,'phone':phone,'fullName':fullName,'email':email,'type':type,'status':status,'kycVerified':kycVerified,'pointsBalance':pointsBalance,'walletBalance':walletBalance,'payLaterEligible':payLaterEligible};
 
-  UserModel copyWith({String? fullName, String? email, int? pointsBalance, double? walletBalance}) =>
-    UserModel(id:id,phone:phone,fullName:fullName??this.fullName,email:email??this.email,deviceToken:deviceToken,type:type,status:status,kycVerified:kycVerified,pointsBalance:pointsBalance??this.pointsBalance,walletBalance:walletBalance??this.walletBalance,createdAt:createdAt,lastLoginAt:lastLoginAt);
+  UserModel copyWith({String? fullName, String? email, int? pointsBalance, double? walletBalance, bool? payLaterEligible}) =>
+    UserModel(id:id,phone:phone,fullName:fullName??this.fullName,email:email??this.email,deviceToken:deviceToken,type:type,status:status,kycVerified:kycVerified,pointsBalance:pointsBalance??this.pointsBalance,walletBalance:walletBalance??this.walletBalance,payLaterEligible:payLaterEligible??this.payLaterEligible,payLaterPending:payLaterPending,payLaterPendingRequestId:payLaterPendingRequestId,createdAt:createdAt,lastLoginAt:lastLoginAt);
 
   bool get isB2B => type == 'B2B';
   bool get isActive => status == 'ACTIVE';
@@ -79,17 +86,19 @@ class ServiceProviderModel {
 class SubServiceModel {
   final String id, serviceProviderId, name, nameAr, category;
   final String? description;
+  final String? imageUrl;
   final double? minAmount, maxAmount;
   final double fixedFee, percentageFee;
   final List<int> quickAmounts;
   final bool isActive;
+  final bool requiresPayLater;
   final int sortOrder;
 
   const SubServiceModel({required this.id, required this.serviceProviderId,
     required this.name, required this.nameAr, required this.category,
-    this.description, this.minAmount, this.maxAmount,
+    this.description, this.imageUrl, this.minAmount, this.maxAmount,
     this.fixedFee=0, this.percentageFee=0, this.quickAmounts=const[],
-    this.isActive=true, this.sortOrder=0});
+    this.isActive=true, this.requiresPayLater=false, this.sortOrder=0});
 
   factory SubServiceModel.fromJson(Map<String,dynamic> j) {
     List<int> qa = [];
@@ -116,6 +125,8 @@ class SubServiceModel {
       percentageFee: double.tryParse((j['percentageFee']??'0').toString())??0,
       quickAmounts: qa,
       isActive: (j['isActive'] as bool?)??true,
+      requiresPayLater: (j['requiresPayLater'] as bool?)??false,
+      imageUrl: j['imageUrl'] as String?,
       sortOrder: (j['sortOrder'] as int?)??0,
     );
   }

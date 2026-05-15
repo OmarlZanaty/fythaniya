@@ -16,9 +16,16 @@ router.get('/profile', async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { id:true, phone:true, fullName:true, email:true, type:true, status:true, kycVerified:true, pointsBalance:true, walletBalance:true, createdAt:true, lastLoginAt:true },
+      select: { id:true, phone:true, fullName:true, email:true, type:true, status:true, kycVerified:true,
+        pointsBalance:true, walletBalance:true, payLaterEligible:true, payLaterApprovedAt:true,
+        createdAt:true, lastLoginAt:true },
     });
-    return apiResponse.success(res, user);
+    // Has the user already requested pay-later activation? (so the UI can show "pending")
+    const pendingActivation = !user.payLaterEligible ? await prisma.request.findFirst({
+      where: { userId: req.user.id, type: 'PAY_LATER_ACTIVATION', status: { in: ['PENDING','ASSIGNED','IN_PROGRESS'] } },
+      select: { id: true, status: true, createdAt: true },
+    }) : null;
+    return apiResponse.success(res, { ...user, payLaterPending: !!pendingActivation, payLaterPendingRequestId: pendingActivation?.id ?? null });
   } catch (err) { next(err); }
 });
 
@@ -68,24 +75,31 @@ router.post('/requests',
   [
     body('serviceProviderId').notEmpty(),
     body('subServiceId').optional(),
-    body('type').isIn(['MOBILE_RECHARGE','BILL_PAYMENT','INTERNET_RECHARGE','TRANSFER']),
+    body('type').isIn(['MOBILE_RECHARGE','BILL_PAYMENT','INTERNET_RECHARGE','TRANSFER','VODAFONE_CASH_DEPOSIT']),
     body('amount').isFloat({ min: 1, max: 50000 }).withMessage('المبلغ يجب أن يكون بين 1 و 50000 ج.م'),
     body('accountNumber').optional(),
     body('phoneNumber').optional(),
+    body('paymentMethod').optional().isString(),
+    body('proofImageUrl').optional().isString(),
   ], validate,
   async (req, res, next) => {
     try {
-      const { serviceProviderId, subServiceId, type, amount, accountNumber, phoneNumber } = req.body;
+      const { serviceProviderId, subServiceId, type, amount, accountNumber, phoneNumber, paymentMethod, proofImageUrl } = req.body;
       const io = req.app.get('io');
 
-      // Get fee from sub-service
+      // Sub-service gating + fee
       let fee = 0;
       if (subServiceId) {
         const sub = await prisma.subService.findUnique({ where: { id: subServiceId } });
-        if (sub) fee = Number(sub.fixedFee) + (amount * Number(sub.percentageFee));
+        if (!sub) return apiResponse.error(res, 'الخدمة الفرعية غير موجودة', 404);
+        if (sub.requiresPayLater) {
+          const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { payLaterEligible: true } });
+          if (!me?.payLaterEligible) return apiResponse.error(res, 'هذه الخدمة غير متاحة لحسابك. يرجى تفعيل الدفع الآجل أولاً.', 403);
+        }
+        fee = Number(sub.fixedFee) + (Number(amount) * Number(sub.percentageFee));
       }
 
-      const totalAmount = amount + fee;
+      const totalAmount = Number(amount) + fee;
       const isCritical = ['MOBILE_RECHARGE'].includes(type);
       const slaMinutes = isCritical ? 5 : 15;
       const slaDeadline = new Date(Date.now() + slaMinutes * 60000);
@@ -98,6 +112,8 @@ router.post('/requests',
           amount, fee, totalAmount,
           accountNumber: accountNumber || null,
           phoneNumber: phoneNumber || null,
+          paymentMethod: paymentMethod || null,
+          proofImageUrl: proofImageUrl || null,
           slaDeadline,
         },
         include: { serviceProvider: true, subService: true },
@@ -107,8 +123,7 @@ router.post('/requests',
         `🔔 طلب جديد — ${type}`,
         `${totalAmount} ج.م — ${accountNumber || phoneNumber || ''}`,
         isCritical ? 'CRITICAL' : 'HIGH',
-        request.id,
-        null,
+        request.id, null,
         { requestId: request.id, type, amount: String(totalAmount) }
       );
       emitToAdmins(io, 'new_request', {
@@ -179,32 +194,77 @@ router.get('/transactions', async (req, res, next) => {
 //  WALLET (top-up & transfer)
 // ═══════════════════════════════════════════════════════════
 
+// Wallet top-up is now a REQUEST that an admin must approve after verifying
+// the payment proof the user uploads. The wallet is credited only on approval.
 router.post('/wallet/topup',
-  [body('amount').isFloat({ min: 10, max: 10000 }).withMessage('المبلغ يجب أن يكون بين 10 و 10000 ج.م')],
+  [
+    body('amount').isFloat({ min: 10, max: 10000 }).withMessage('المبلغ يجب أن يكون بين 10 و 10000 ج.م'),
+    body('paymentMethod').optional().isString(),
+  ],
   validate,
   async (req, res, next) => {
     try {
       const amount = Number(req.body.amount);
-      const result = await prisma.$transaction(async (tx) => {
-        const updated = await tx.user.update({
-          where: { id: req.user.id },
-          data: { walletBalance: { increment: amount } },
-          select: { walletBalance: true },
-        });
-        const txn = await tx.transaction.create({
-          data: {
-            userId: req.user.id,
-            amount, fee: 0, totalAmount: amount,
-            status: 'SUCCESS', paymentMethod: 'TOPUP',
-          },
-        });
-        return { newBalance: updated.walletBalance, transactionId: txn.id };
+      const paymentMethod = (req.body.paymentMethod || 'BANK_TRANSFER').toString();
+      const slaDeadline = new Date(Date.now() + 60 * 60000); // 1h to verify
+
+      const request = await prisma.request.create({
+        data: {
+          userId: req.user.id,
+          type: 'WALLET_TOPUP', status: 'PENDING',
+          amount, fee: 0, totalAmount: amount,
+          paymentMethod, slaDeadline,
+        },
       });
-      await notifyUser(req.user.id, '💰 تم شحن المحفظة', `تم إضافة ${amount} ج.م إلى محفظتك`, 'NORMAL');
-      return apiResponse.success(res, result, 'تم شحن المحفظة بنجاح', 201);
+
+      const io = req.app.get('io');
+      emitToAdmins(io, 'new_request', { requestId: request.id, type: 'WALLET_TOPUP', amount: String(amount), userId: req.user.id, slaDeadline });
+      await notifyAdmins(`🔔 طلب شحن محفظة جديد`, `${amount} ج.م — بانتظار التحقق`, 'HIGH', request.id, null, { requestId: request.id, type: 'WALLET_TOPUP' });
+      await notifyUser(req.user.id, '⏳ تم استلام طلب الشحن', `طلب شحن محفظتك بمبلغ ${amount} ج.م قيد المراجعة. سيتم إضافة المبلغ بعد التحقق من إثبات الدفع.`, 'NORMAL', { requestId: request.id });
+
+      return apiResponse.success(res, { requestId: request.id, amount, status: 'PENDING' }, 'تم إرسال طلب الشحن للمراجعة', 201);
     } catch (err) { next(err); }
   }
 );
+
+// Pay-later activation request — admin must approve before user can use pay-later
+router.post('/pay-later/activate', async (req, res, next) => {
+  try {
+    const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { payLaterEligible: true, fullName: true } });
+    if (me.payLaterEligible) return apiResponse.error(res, 'تم تفعيل خدمة الدفع الآجل لحسابك بالفعل', 400);
+
+    const existing = await prisma.request.findFirst({
+      where: { userId: req.user.id, type: 'PAY_LATER_ACTIVATION', status: { in: ['PENDING','ASSIGNED','IN_PROGRESS'] } },
+    });
+    if (existing) return apiResponse.error(res, 'لديك طلب تفعيل قيد المراجعة بالفعل', 409);
+
+    const request = await prisma.request.create({
+      data: { userId: req.user.id, type: 'PAY_LATER_ACTIVATION', status: 'PENDING', amount: 0, fee: 0, totalAmount: 0 },
+    });
+
+    const io = req.app.get('io');
+    emitToAdmins(io, 'new_request', { requestId: request.id, type: 'PAY_LATER_ACTIVATION', amount: '0', userId: req.user.id });
+    await notifyAdmins(`📝 طلب تفعيل الدفع الآجل`, `${me.fullName} يطلب تفعيل خدمة الدفع الآجل`, 'HIGH', request.id);
+
+    return apiResponse.success(res, { requestId: request.id, status: 'PENDING' }, 'تم إرسال طلب التفعيل للمراجعة', 201);
+  } catch (err) { next(err); }
+});
+
+// Upload payment-proof image for a request. Must be the request owner.
+const { makeUploader, publicUrl } = require('../middleware/upload');
+const proofUploader = makeUploader('proofs', { maxMB: 5 });
+router.post('/requests/:id/proof', proofUploader.single('image'), async (req, res, next) => {
+  try {
+    if (!req.file) return apiResponse.error(res, 'لم يتم استلام صورة', 400);
+    const r = await prisma.request.findFirst({ where: { id: req.params.id, userId: req.user.id } });
+    if (!r) return apiResponse.error(res, 'Not found', 404);
+    if (!['PENDING','ASSIGNED','IN_PROGRESS'].includes(r.status)) return apiResponse.error(res, 'لا يمكن رفع إثبات بعد إنهاء الطلب', 400);
+
+    const url = publicUrl(req, 'proofs', req.file.filename);
+    await prisma.request.update({ where: { id: r.id }, data: { proofImageUrl: url } });
+    return apiResponse.success(res, { proofImageUrl: url }, 'تم رفع الإثبات');
+  } catch (err) { next(err); }
+});
 
 router.post('/wallet/transfer',
   [

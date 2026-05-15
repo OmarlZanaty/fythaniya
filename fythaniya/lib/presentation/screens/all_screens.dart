@@ -10,6 +10,7 @@ export 'notifications/notifications_screen.dart';
 export 'wallet/wallet_screen.dart';
 export 'wallet/topup_screen.dart';
 export 'wallet/transfer_screen.dart';
+export 'wallet/pay_later_screen.dart';
 export 'rewards/rewards_screen.dart';
 export 'profile/profile_screens.dart';
 export 'b2b/b2b_screens.dart';

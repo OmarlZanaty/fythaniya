@@ -154,20 +154,22 @@ router.post('/admin/providers/:providerId/sub-services', authenticateAdmin, requ
 router.put('/admin/sub-services/:id', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
   async (req, res, next) => {
     try {
-      const { name, nameAr, description, minAmount, maxAmount, fixedFee, percentageFee, quickAmounts, sortOrder, isActive } = req.body;
+      const { name, nameAr, description, minAmount, maxAmount, fixedFee, percentageFee, quickAmounts, sortOrder, isActive, requiresPayLater, imageUrl } = req.body;
       const sub = await prisma.subService.update({
         where: { id: req.params.id },
         data: {
-          ...(name           !== undefined && { name }),
-          ...(nameAr         !== undefined && { nameAr }),
-          ...(description    !== undefined && { description }),
-          ...(minAmount      !== undefined && { minAmount }),
-          ...(maxAmount      !== undefined && { maxAmount }),
-          ...(fixedFee       !== undefined && { fixedFee }),
-          ...(percentageFee  !== undefined && { percentageFee }),
-          ...(quickAmounts   !== undefined && { quickAmounts: JSON.stringify(quickAmounts) }),
-          ...(sortOrder      !== undefined && { sortOrder }),
-          ...(isActive       !== undefined && { isActive }),
+          ...(name             !== undefined && { name }),
+          ...(nameAr           !== undefined && { nameAr }),
+          ...(description      !== undefined && { description }),
+          ...(minAmount        !== undefined && { minAmount }),
+          ...(maxAmount        !== undefined && { maxAmount }),
+          ...(fixedFee         !== undefined && { fixedFee }),
+          ...(percentageFee    !== undefined && { percentageFee }),
+          ...(quickAmounts     !== undefined && { quickAmounts: JSON.stringify(quickAmounts) }),
+          ...(sortOrder        !== undefined && { sortOrder }),
+          ...(isActive         !== undefined && { isActive }),
+          ...(requiresPayLater !== undefined && { requiresPayLater }),
+          ...(imageUrl         !== undefined && { imageUrl }),
         },
       });
       return apiResponse.success(res, sub, 'Sub-service updated');
@@ -181,6 +183,32 @@ router.delete('/admin/sub-services/:id', authenticateAdmin, requireRole('SUPER_A
     try {
       await prisma.subService.update({ where: { id: req.params.id }, data: { isActive: false } });
       return apiResponse.success(res, null, 'Sub-service deactivated');
+    } catch (err) { next(err); }
+  }
+);
+
+// ─── IMAGE UPLOAD (provider logo / sub-service image) ────────────────────────
+const { makeUploader, publicUrl } = require('../../middleware/upload');
+const svcUploader = makeUploader('services', { maxMB: 3 });
+
+router.post('/admin/providers/:id/logo', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
+  svcUploader.single('image'), async (req, res, next) => {
+    try {
+      if (!req.file) return apiResponse.error(res, 'لم يتم استلام صورة', 400);
+      const url = publicUrl(req, 'services', req.file.filename);
+      const p = await prisma.serviceProvider.update({ where: { id: req.params.id }, data: { logoUrl: url } });
+      return apiResponse.success(res, { logoUrl: url, provider: p }, 'تم رفع الشعار');
+    } catch (err) { next(err); }
+  }
+);
+
+router.post('/admin/sub-services/:id/image', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
+  svcUploader.single('image'), async (req, res, next) => {
+    try {
+      if (!req.file) return apiResponse.error(res, 'لم يتم استلام صورة', 400);
+      const url = publicUrl(req, 'services', req.file.filename);
+      const s = await prisma.subService.update({ where: { id: req.params.id }, data: { imageUrl: url } });
+      return apiResponse.success(res, { imageUrl: url, subService: s }, 'تم رفع الصورة');
     } catch (err) { next(err); }
   }
 );

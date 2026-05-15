@@ -56,6 +56,7 @@ class _AdminAppState extends State<AdminApp> {
         GoRoute(path:AdminRoutes.users,    builder:(_,__)=>const AdminShell(child:UsersScreen())),
         GoRoute(path:AdminRoutes.notifs,   builder:(_,__)=>const AdminShell(child:AdminNotifsScreen())),
         GoRoute(path:AdminRoutes.settings, builder:(_,__)=>const AdminShell(child:SettingsScreen())),
+        GoRoute(path:AdminRoutes.reports,  builder:(_,__)=>const AdminShell(child:ReportsScreen())),
       ]);
   }
   @override void dispose(){_auth.close();_notifier.dispose();super.dispose();}
@@ -120,15 +121,45 @@ class StatusBadge extends StatelessWidget {
   }
 }
 
+/// Bottom navigation shared across the main admin screens.
+class AdminBottomNav extends StatelessWidget {
+  final String current; // 'dashboard' | 'requests' | 'b2b' | 'services' | 'reports'
+  const AdminBottomNav({super.key, required this.current});
+  static const _items = [
+    ('dashboard', Icons.dashboard_rounded,     'الرئيسية', AdminRoutes.dashboard),
+    ('requests',  Icons.queue_rounded,         'الطلبات',  AdminRoutes.requests),
+    ('b2b',       Icons.business_rounded,      'شركات',   AdminRoutes.b2b),
+    ('services',  Icons.tune_rounded,          'الخدمات',  AdminRoutes.services),
+    ('reports',   Icons.assessment_rounded,    'التقارير', AdminRoutes.reports),
+  ];
+  @override
+  Widget build(BuildContext context) => BottomNavigationBar(
+    type: BottomNavigationBarType.fixed,
+    selectedItemColor: AC.primary, unselectedItemColor: AC.textMuted,
+    backgroundColor: AC.surface, elevation: 8,
+    currentIndex: _items.indexWhere((it) => it.$1 == current).clamp(0, _items.length - 1),
+    onTap: (i) {
+      final target = _items[i].$4;
+      if (_items[i].$1 == current) return;
+      context.go(target);
+    },
+    items: _items.map((it) => BottomNavigationBarItem(icon: Icon(it.$2), label: it.$3)).toList(),
+  );
+}
+
 class StatCard extends StatelessWidget {
-  final String label;final String value;final IconData icon;final Color color;final String?subtitle;
-  const StatCard({super.key,required this.label,required this.value,required this.icon,required this.color,this.subtitle});
-  @override Widget build(BuildContext ctx)=>ACard(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    Row(children:[Container(width:40,height:40,decoration:BoxDecoration(color:color.withOpacity(0.1),borderRadius:BorderRadius.circular(10)),child:Icon(icon,color:color,size:22)),const Spacer(),if(subtitle!=null)Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:4),decoration:BoxDecoration(color:color.withOpacity(0.1),borderRadius:BorderRadius.circular(20)),child:Text(subtitle!,style:AT.cap.copyWith(color:color,fontWeight:FontWeight.w600)))],),
-    const SizedBox(height:AD.sm),
-    Text(value,style:AT.num.copyWith(color:color)),
-    Text(label,style:AT.cap),
-  ]));
+  final String label;final String value;final IconData icon;final Color color;final String?subtitle;final VoidCallback? onTap;
+  const StatCard({super.key,required this.label,required this.value,required this.icon,required this.color,this.subtitle,this.onTap});
+  @override Widget build(BuildContext ctx) {
+    final card = ACard(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Row(children:[Container(width:40,height:40,decoration:BoxDecoration(color:color.withOpacity(0.1),borderRadius:BorderRadius.circular(10)),child:Icon(icon,color:color,size:22)),const Spacer(),if(subtitle!=null)Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:4),decoration:BoxDecoration(color:color.withOpacity(0.1),borderRadius:BorderRadius.circular(20)),child:Text(subtitle!,style:AT.cap.copyWith(color:color,fontWeight:FontWeight.w600)))],),
+      const SizedBox(height:AD.sm),
+      Text(value,style:AT.num.copyWith(color:color)),
+      Text(label,style:AT.cap),
+    ]));
+    if (onTap == null) return card;
+    return Material(color: Colors.transparent, child: InkWell(borderRadius: BorderRadius.circular(AD.r12), onTap: onTap, child: card));
+  }
 }
 
 void _showErr(BuildContext ctx,String msg)=>ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text(msg),backgroundColor:AC.error));
@@ -143,7 +174,7 @@ class _LoginState extends State<LoginScreen> {
   @override void dispose(){_email.dispose();_pass.dispose();super.dispose();}
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.primary,body:SafeArea(child:Column(children:[
     const SizedBox(height:60),
-    Container(width:88,height:88,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(22),boxShadow:[BoxShadow(color:Colors.black.withOpacity(0.2),blurRadius:20)]),child:Icon(Icons.bolt_rounded,color:AC.primary,size:50)),
+    Container(width:120,height:120,decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(24),boxShadow:[BoxShadow(color:Colors.black.withOpacity(0.2),blurRadius:20)]),padding: const EdgeInsets.all(12), child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.asset('assets/images/logo.png', fit: BoxFit.contain))),
     const SizedBox(height:16),Text('فى ثانية',style:AT.h1.copyWith(color:Colors.white,fontSize:28)),
     Text('لوحة الإدارة',style:AT.cap.copyWith(color:Colors.white70)),
     const SizedBox(height:48),
@@ -179,6 +210,7 @@ class _DashState extends State<DashboardScreen> {
     super.dispose();
   }
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
+    bottomNavigationBar: const AdminBottomNav(current: 'dashboard'),
     appBar:AppBar(title:const Text('لوحة التحكم'),backgroundColor:AC.primary,actions:[
       BlocBuilder<AdminNotifBloc,AdminNotifState>(builder:(ctx,s){final unread=s is AdminNotifLoaded?s.unread:0;return badges.Badge(badgeContent:Text('$unread',style:const TextStyle(color:Colors.white,fontSize:10)),showBadge:unread>0,child:IconButton(icon:const Icon(Icons.notifications_outlined),onPressed:()=>ctx.push(AdminRoutes.notifs)));})]),
     drawer:const AdminDrawer(),
@@ -197,18 +229,18 @@ class _DashState extends State<DashboardScreen> {
 
             // Stats grid
             GridView.count(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisCount:2,crossAxisSpacing:12,mainAxisSpacing:12,childAspectRatio:1.4,children:[
-              StatCard(label:'طلبات منتظرة',value:'${st.pending}',icon:Icons.pending_actions_rounded,color:AC.warning,subtitle:st.pending>0?'عاجل':null),
-              StatCard(label:'جارٍ تنفيذها',value:'${st.inProgress}',icon:Icons.autorenew_rounded,color:AC.info),
-              StatCard(label:'مكتملة اليوم',value:'${st.completedToday}',icon:Icons.check_circle_rounded,color:AC.success),
-              StatCard(label:'فشلت اليوم',value:'${st.failedToday}',icon:Icons.cancel_rounded,color:AC.error),
-              StatCard(label:'إجمالي المستخدمين',value:'${st.totalUsers}',icon:Icons.people_rounded,color:AC.primary,subtitle:'+${st.newUsersToday} اليوم'),
-              StatCard(label:'إيرادات',value:'${st.totalRevenue.toStringAsFixed(0)} ج.م',icon:Icons.monetization_on_rounded,color:AC.accent),
+              StatCard(label:'طلبات منتظرة',value:'${st.pending}',icon:Icons.pending_actions_rounded,color:AC.warning,subtitle:st.pending>0?'عاجل':null, onTap: ()=>ctx.push(AdminRoutes.requests)),
+              StatCard(label:'جارٍ تنفيذها',value:'${st.inProgress}',icon:Icons.autorenew_rounded,color:AC.info, onTap: ()=>ctx.push(AdminRoutes.requests)),
+              StatCard(label:'مكتملة اليوم',value:'${st.completedToday}',icon:Icons.check_circle_rounded,color:AC.success, onTap: ()=>ctx.push(AdminRoutes.requests)),
+              StatCard(label:'فشلت اليوم',value:'${st.failedToday}',icon:Icons.cancel_rounded,color:AC.error, onTap: ()=>ctx.push(AdminRoutes.requests)),
+              StatCard(label:'إجمالي المستخدمين',value:'${st.totalUsers}',icon:Icons.people_rounded,color:AC.primary,subtitle:'+${st.newUsersToday} اليوم', onTap: ()=>ctx.push(AdminRoutes.users)),
+              StatCard(label:'إيرادات',value:'${st.totalRevenue.toStringAsFixed(0)} ج.م',icon:Icons.monetization_on_rounded,color:AC.accent, onTap: ()=>ctx.push(AdminRoutes.reports)),
             ]),
             const SizedBox(height:AD.md),
 
             // B2B summary
             if(st.b2bPending>0||st.b2bOverdue>0)ACard(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              Row(children:[const Icon(Icons.business_rounded,color:AC.b2b,size:22),const SizedBox(width:8),Text('B2B',style:AT.h3.copyWith(color:AC.b2b)),const Spacer(),TextButton(onPressed:()=>ctx.push(AdminRoutes.b2b),child:const Text('عرض الكل'))]),
+              Row(children:[const Icon(Icons.business_rounded,color:AC.b2b,size:22),const SizedBox(width:8),Text('شركات',style:AT.h3.copyWith(color:AC.b2b)),const Spacer(),TextButton(onPressed:()=>ctx.push(AdminRoutes.b2b),child:const Text('عرض الكل'))]),
               const Divider(height:16),
               Row(children:[
                 Expanded(child:_B2BStat(label:'طلبات معلقة',value:'${st.b2bPending}',color:AC.warning)),
@@ -222,7 +254,7 @@ class _DashState extends State<DashboardScreen> {
             Row(children:[
               Expanded(child:_QuickAction(icon:Icons.queue_rounded,label:'طابور الطلبات',color:AC.primary,onTap:()=>ctx.push(AdminRoutes.requests))),
               const SizedBox(width:12),
-              Expanded(child:_QuickAction(icon:Icons.business_rounded,label:'طلبات B2B',color:AC.b2b,onTap:()=>ctx.push(AdminRoutes.b2b))),
+              Expanded(child:_QuickAction(icon:Icons.business_rounded,label:'الشركات',color:AC.b2b,onTap:()=>ctx.push(AdminRoutes.b2b))),
               const SizedBox(width:12),
               Expanded(child:_QuickAction(icon:Icons.tune_rounded,label:'الخدمات',color:AC.accent,onTap:()=>ctx.push(AdminRoutes.services))),
             ]),
@@ -241,14 +273,15 @@ class _QuickAction extends StatelessWidget { final IconData icon;final String la
 class AdminDrawer extends StatelessWidget {
   const AdminDrawer({super.key});
   @override Widget build(BuildContext ctx)=>Drawer(child:Column(children:[
-    Container(width:double.infinity,padding:const EdgeInsets.fromLTRB(20,50,20,20),color:AC.primary,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Icon(Icons.bolt_rounded,color:Colors.white,size:40),const SizedBox(height:8),Text('فى ثانية',style:AT.h2.copyWith(color:Colors.white)),Text('لوحة الإدارة',style:AT.cap.copyWith(color:Colors.white70))])),
+    Container(width:double.infinity,padding:const EdgeInsets.fromLTRB(20,50,20,20),color:AC.primary,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[SizedBox(height:42, child: Image.asset('assets/images/logo.png', fit: BoxFit.contain, color: Colors.white)),const SizedBox(height:8),Text('فى ثانية',style:AT.h2.copyWith(color:Colors.white)),Text('لوحة الإدارة',style:AT.cap.copyWith(color:Colors.white70))])),
     Expanded(child:ListView(padding:EdgeInsets.zero,children:[
       _DItem(Icons.dashboard_rounded,'لوحة التحكم',AdminRoutes.dashboard),
       _DItem(Icons.queue_rounded,'طابور الطلبات',AdminRoutes.requests,badge:null),
-      _DItem(Icons.business_rounded,'B2B',AdminRoutes.b2b),
+      _DItem(Icons.business_rounded,'شركات',AdminRoutes.b2b),
       _DItem(Icons.tune_rounded,'الخدمات',AdminRoutes.services),
       _DItem(Icons.people_rounded,'المستخدمون',AdminRoutes.users),
       _DItem(Icons.notifications_rounded,'الإشعارات',AdminRoutes.notifs),
+      _DItem(Icons.assessment_rounded,'التقارير',AdminRoutes.reports),
       const Divider(),
       _DItem(Icons.settings_rounded,'الإعدادات',AdminRoutes.settings),
       ListTile(leading:const Icon(Icons.logout_rounded,color:AC.error),title:Text('تسجيل الخروج',style:AT.body.copyWith(color:AC.error)),onTap:()=>ctx.read<AdminAuthBloc>().add(AdminLogoutEvent())),
@@ -276,6 +309,7 @@ class _ReqScreenState extends State<RequestsScreen> {
     AdminSocketService.instance.newRequest.addListener(_newReqListener);
   }
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
+    bottomNavigationBar: const AdminBottomNav(current: 'requests'),
     appBar:AppBar(title:const Text('طابور الطلبات'),backgroundColor:AC.primary,actions:[IconButton(icon:const Icon(Icons.refresh_rounded),onPressed:()=>ctx.read<ReqBloc>().add(ReqRefreshEvent()))]),
     drawer:const AdminDrawer(),
     body:Column(children:[
@@ -308,7 +342,7 @@ class _RequestTile extends StatelessWidget {
   final RequestItem req;final VoidCallback onTap;
   const _RequestTile({required this.req,required this.onTap});
   @override Widget build(BuildContext ctx){
-    final typeNames={'MOBILE_RECHARGE':'شحن رصيد','BILL_PAYMENT':'دفع فاتورة','INTERNET_RECHARGE':'شحن إنترنت','B2B_PAY_LATER':'B2B Pay Later','TRANSFER':'تحويل'};
+    final typeNames={'MOBILE_RECHARGE':'شحن رصيد','BILL_PAYMENT':'دفع فاتورة','INTERNET_RECHARGE':'شحن إنترنت','B2B_PAY_LATER':'دفع آجل شركات','TRANSFER':'تحويل','WALLET_TOPUP':'شحن محفظة','PAY_LATER_ACTIVATION':'تفعيل دفع آجل','VODAFONE_CASH_DEPOSIT':'فودافون كاش'};
     return GestureDetector(onTap:onTap,child:Container(margin:const EdgeInsets.only(bottom:8),decoration:BoxDecoration(color:req.slaBreached?AC.errorBg:AC.surface,borderRadius:BorderRadius.circular(AD.r12),border:Border.all(color:req.slaBreached?AC.error.withOpacity(0.3):AC.border)),
       child:ListTile(
         leading:Container(width:44,height:44,decoration:BoxDecoration(color:req.isPending?AC.warningBg:req.isCompleted?AC.successBg:AC.errorBg,borderRadius:BorderRadius.circular(10)),child:Icon(req.isPending?Icons.pending_rounded:req.isCompleted?Icons.check_circle_rounded:Icons.cancel_rounded,color:req.isPending?AC.warning:req.isCompleted?AC.success:AC.error,size:22)),
@@ -368,34 +402,41 @@ class _ReqDetailState extends State<RequestDetailScreen> {
         ])),
         const SizedBox(height:AD.md),
 
-        // Actions (only if pending)
+        // Payment-proof image (if uploaded)
+        if(_req!.proofImageUrl != null) ACard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Icon(Icons.receipt_long_rounded, color: AC.primary, size: 20), const SizedBox(width: 8), Text('إثبات الدفع', style: AT.h3)]),
+          const SizedBox(height: AD.sm),
+          GestureDetector(
+            onTap: () => showDialog(context: ctx, builder: (_) => Dialog(child: InteractiveViewer(child: Image.network(_req!.proofImageUrl!)))),
+            child: ClipRRect(borderRadius: BorderRadius.circular(AD.r12), child: Image.network(_req!.proofImageUrl!, height: 220, fit: BoxFit.cover, width: double.infinity)),
+          ),
+          const SizedBox(height: AD.xs),
+          Text('اضغط على الصورة للتكبير', style: AT.cap.copyWith(color: AC.textMuted)),
+        ])),
+        if(_req!.proofImageUrl != null) const SizedBox(height:AD.md),
+
+        // Actions (only if pending) — approve + reject only
         if(_req!.isPending)...[
-          // Complete
+          // Approve / Complete
           ACard(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text('تنفيذ الطلب ✅',style:AT.h3.copyWith(color:AC.success)),const SizedBox(height:AD.sm),
+            Text(_req!.type == 'WALLET_TOPUP' ? 'الموافقة وإضافة المبلغ للمحفظة ✅'
+              : _req!.type == 'PAY_LATER_ACTIVATION' ? 'الموافقة على تفعيل الدفع الآجل ✅'
+              : 'تنفيذ الطلب ✅', style:AT.h3.copyWith(color:AC.success)),const SizedBox(height:AD.sm),
             TextField(controller:_ref,textDirection:TextDirection.ltr,decoration:const InputDecoration(labelText:'رقم المرجع الخارجي (اختياري)',border:OutlineInputBorder())),
             const SizedBox(height:AD.sm),
             TextField(controller:_note,textDirection:TextDirection.rtl,decoration:const InputDecoration(labelText:'ملاحظة (اختياري)',border:OutlineInputBorder())),
             const SizedBox(height:AD.md),
-            SizedBox(width:double.infinity,height:AD.btnH,child:ElevatedButton.icon(onPressed:()=>showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('تأكيد التنفيذ'),content:Text('هل تريد تنفيذ الطلب ${widget.id.substring(0,8)}؟'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){Navigator.pop(ctx);ctx.read<ReqBloc>().add(ReqCompleteEvent(widget.id,ref:_ref.text.trim().isEmpty?null:_ref.text.trim(),note:_note.text.trim().isEmpty?null:_note.text.trim()));},child:const Text('تأكيد'))])),icon:const Icon(Icons.check_circle_rounded),label:const Text('تنفيذ',style:AT.btn),style:ElevatedButton.styleFrom(backgroundColor:AC.success))),
+            SizedBox(width:double.infinity,height:AD.btnH,child:ElevatedButton.icon(onPressed:()=>showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('تأكيد الموافقة'),content:Text('هل تريد الموافقة على الطلب ${widget.id.substring(0,8)}؟'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){Navigator.pop(ctx);ctx.read<ReqBloc>().add(ReqCompleteEvent(widget.id,ref:_ref.text.trim().isEmpty?null:_ref.text.trim(),note:_note.text.trim().isEmpty?null:_note.text.trim()));},child:const Text('تأكيد'))])),icon:const Icon(Icons.check_circle_rounded),label:const Text('موافقة',style:AT.btn),style:ElevatedButton.styleFrom(backgroundColor:AC.success))),
           ])),
           const SizedBox(height:AD.sm),
 
-          // Fail
+          // Reject / Fail
           ACard(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text('رفض الطلب ❌',style:AT.h3.copyWith(color:AC.error)),const SizedBox(height:AD.sm),
             TextField(controller:_reason,textDirection:TextDirection.rtl,decoration:const InputDecoration(labelText:'سبب الرفض *',border:OutlineInputBorder())),
             const SizedBox(height:AD.md),
             SizedBox(width:double.infinity,height:AD.btnH,child:ElevatedButton.icon(onPressed:(){if(_reason.text.trim().isEmpty){_showErr(ctx,'يجب إدخال سبب الرفض');return;}showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('تأكيد الرفض'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){Navigator.pop(ctx);ctx.read<ReqBloc>().add(ReqFailEvent(widget.id,_reason.text.trim()));},child:Text('رفض',style:TextStyle(color:AC.error)))]));}  ,icon:const Icon(Icons.cancel_rounded),label:const Text('رفض',style:AT.btn),style:ElevatedButton.styleFrom(backgroundColor:AC.error))),
           ])),
-          const SizedBox(height:AD.sm),
-
-          // Escalate + Refund
-          Row(children:[
-            Expanded(child:ElevatedButton.icon(onPressed:()=>ctx.read<ReqBloc>().add(ReqEscalateEvent(widget.id,'تصعيد يدوي')),icon:const Icon(Icons.warning_rounded,size:18),label:const Text('تصعيد',style:AT.btn),style:ElevatedButton.styleFrom(backgroundColor:AC.critical,minimumSize:const Size(0,AD.btnH)))),
-            const SizedBox(width:12),
-            Expanded(child:ElevatedButton.icon(onPressed:()=>ctx.read<ReqBloc>().add(ReqRefundEvent(widget.id)),icon:const Icon(Icons.replay_rounded,size:18),label:const Text('استرداد',style:AT.btn),style:ElevatedButton.styleFrom(backgroundColor:AC.warning,minimumSize:const Size(0,AD.btnH)))),
-          ]),
         ],
         const SizedBox(height:AD.xxl),
       ])));
@@ -411,7 +452,8 @@ class _B2BScreenState extends State<B2BScreen> with SingleTickerProviderStateMix
   @override void initState(){super.initState();_tab=TabController(length:2,vsync:this);context.read<AdminB2BBloc>().add(AdminB2BLoadApplicationsEvent());}
   @override void dispose(){_tab.dispose();super.dispose();}
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
-    appBar:AppBar(title:const Text('B2B'),backgroundColor:AC.primary,
+    bottomNavigationBar: const AdminBottomNav(current: 'b2b'),
+    appBar:AppBar(title:const Text('شركات'),backgroundColor:AC.primary,
       bottom:TabBar(controller:_tab,labelColor:Colors.white,unselectedLabelColor:Colors.white70,indicatorColor:Colors.white,
         onTap:(i){if(i==0)ctx.read<AdminB2BBloc>().add(AdminB2BLoadApplicationsEvent());else ctx.read<AdminB2BBloc>().add(AdminB2BLoadAccountsEvent());},
         tabs:const[Tab(text:'طلبات معلقة'),Tab(text:'الحسابات النشطة')])),
@@ -530,6 +572,7 @@ class ServicesScreen extends StatefulWidget { const ServicesScreen({super.key});
 class _ServicesState extends State<ServicesScreen> {
   @override void initState(){super.initState();context.read<AdminServicesBloc>().add(AdminServicesLoadEvent());}
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
+    bottomNavigationBar: const AdminBottomNav(current: 'services'),
     appBar:AppBar(title:const Text('الخدمات'),backgroundColor:AC.primary,
       actions:[IconButton(icon:const Icon(Icons.add_rounded),onPressed:()=>_showAddProvider(ctx))]),
     drawer:const AdminDrawer(),
@@ -649,3 +692,131 @@ class _ANotifsState extends State<AdminNotifsScreen> {
 //  SETTINGS SCREEN
 // ════════════════════════════════════════════════════════
 class SettingsScreen extends StatelessWidget { const SettingsScreen({super.key}); @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,appBar:AppBar(title:const Text('الإعدادات'),backgroundColor:AC.primary),drawer:const AdminDrawer(),body:ListView(padding:const EdgeInsets.all(AD.md),children:[ACard(child:ListTile(leading:const Icon(Icons.logout_rounded,color:AC.error),title:Text('تسجيل الخروج',style:AT.body.copyWith(color:AC.error)),onTap:()=>ctx.read<AdminAuthBloc>().add(AdminLogoutEvent())))])); }
+
+
+// ════════════════════════════════════════════════════════
+//  REPORTS SCREEN
+// ════════════════════════════════════════════════════════
+class ReportsScreen extends StatefulWidget { const ReportsScreen({super.key}); @override State<ReportsScreen> createState()=>_ReportsState(); }
+class _ReportsState extends State<ReportsScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tab;
+  Map<String,dynamic>? _txReport;
+  List<dynamic> _payLaterInvoices = [];
+  List<dynamic> _payLaterSummary = [];
+  bool _loading = true;
+  DateTime _from = DateTime.now().subtract(const Duration(days: 30));
+  DateTime _to = DateTime.now();
+  @override void initState() { super.initState(); _tab = TabController(length: 2, vsync: this); _load(); }
+  @override void dispose() { _tab.dispose(); super.dispose(); }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final tx = await AdminApiClient.instance.get('/admin/reports/transactions', params: {
+        'from': _from.toIso8601String(), 'to': _to.toIso8601String(),
+      });
+      final pl = await AdminApiClient.instance.get('/admin/reports/pay-later');
+      if (!mounted) return;
+      setState(() {
+        _txReport = tx['data'] as Map<String, dynamic>?;
+        _payLaterInvoices = ((pl['data'] as Map<String,dynamic>?)?['invoices'] as List?) ?? [];
+        _payLaterSummary = ((pl['data'] as Map<String,dynamic>?)?['summary'] as List?) ?? [];
+        _loading = false;
+      });
+    } catch (e) {
+      print('[Reports] $e');
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _pickRange() async {
+    final picked = await showDateRangePicker(
+      context: context, firstDate: DateTime(2025), lastDate: DateTime.now(),
+      initialDateRange: DateTimeRange(start: _from, end: _to),
+    );
+    if (picked != null) { setState(() { _from = picked.start; _to = picked.end; }); _load(); }
+  }
+
+  Future<void> _markPaid(String invoiceId) async {
+    try {
+      await AdminApiClient.instance.put('/admin/reports/pay-later/$invoiceId/mark-settled');
+      _showOk(context, 'تم تسجيل السداد');
+      _load();
+    } catch (e) { _showErr(context, '$e'); }
+  }
+
+  @override Widget build(BuildContext ctx) => Scaffold(
+    backgroundColor: AC.bg,
+    bottomNavigationBar: const AdminBottomNav(current: 'reports'),
+    appBar: AppBar(title: const Text('التقارير'), backgroundColor: AC.primary,
+      actions: [IconButton(icon: const Icon(Icons.date_range_rounded), onPressed: _pickRange)],
+      bottom: TabBar(controller: _tab, tabs: const [Tab(text: 'المعاملات'), Tab(text: 'الدفع الآجل')]),
+    ),
+    drawer: const AdminDrawer(),
+    body: _loading
+      ? const Center(child: CircularProgressIndicator(color: AC.primary))
+      : TabBarView(controller: _tab, children: [
+        // Transactions tab
+        RefreshIndicator(onRefresh: _load, color: AC.primary, child: ListView(padding: const EdgeInsets.all(AD.md), children: [
+          ACard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('الفترة: ${_from.day}/${_from.month} → ${_to.day}/${_to.month}', style: AT.cap),
+            const Divider(height: 16),
+            if (_txReport?['totals'] != null) ...[
+              _Row('عدد المعاملات', '${_txReport!['totals']['count'] ?? 0}'),
+              _Row('إجمالي المبلغ', '${_txReport!['totals']['totalAmount'] ?? '0'} ج.م'),
+              _Row('إجمالي الرسوم', '${_txReport!['totals']['totalFee'] ?? '0'} ج.م'),
+            ],
+          ])),
+          const SizedBox(height: AD.md),
+          ACard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('حسب الحالة', style: AT.h3), const SizedBox(height: AD.sm),
+            ...((_txReport?['byStatus'] as List?) ?? []).map((s) => _Row(
+              '${s['status']}', '${s['_count']?['_all'] ?? 0} — ${s['_sum']?['totalAmount'] ?? 0} ج.م',
+            )),
+          ])),
+          const SizedBox(height: AD.md),
+          ACard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('حسب طريقة الدفع', style: AT.h3), const SizedBox(height: AD.sm),
+            ...((_txReport?['byMethod'] as List?) ?? []).map((m) => _Row(
+              '${m['paymentMethod']}', '${m['_count']?['_all'] ?? 0} — ${m['_sum']?['totalAmount'] ?? 0} ج.م',
+            )),
+          ])),
+        ])),
+
+        // Pay-later tab
+        RefreshIndicator(onRefresh: _load, color: AC.primary, child: ListView(padding: const EdgeInsets.all(AD.md), children: [
+          ACard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('الملخص حسب الحالة', style: AT.h3), const SizedBox(height: AD.sm),
+            ..._payLaterSummary.map((s) => _Row(
+              '${s['status']}', '${s['_count']?['_all'] ?? 0} فاتورة — ${s['_sum']?['amount'] ?? 0} ج.م',
+            )),
+          ])),
+          const SizedBox(height: AD.md),
+          ..._payLaterInvoices.map((inv) {
+            final user = (inv['b2bAccount']?['user']) as Map<String,dynamic>?;
+            final amount = inv['amount']?.toString() ?? '0';
+            final status = inv['status']?.toString() ?? '';
+            return ACard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text(inv['invoiceNo']?.toString() ?? '—', style: AT.bodyM)),
+                StatusBadge(status: status, small: true),
+              ]),
+              const SizedBox(height: 6),
+              Text('${user?['fullName'] ?? '—'} • ${user?['phone'] ?? '—'}', style: AT.cap),
+              const SizedBox(height: 4),
+              Text('$amount ج.م', style: AT.bodyM.copyWith(color: AC.primary)),
+              if (status != 'SETTLED') ...[
+                const SizedBox(height: 8),
+                SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                  icon: const Icon(Icons.check_rounded, size: 18),
+                  label: const Text('تسجيل سداد'),
+                  onPressed: () => _markPaid(inv['id']?.toString() ?? ''),
+                )),
+              ],
+            ]));
+          }),
+        ])),
+      ]),
+  );
+}

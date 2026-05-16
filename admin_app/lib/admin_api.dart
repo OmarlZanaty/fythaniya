@@ -88,6 +88,24 @@ class AdminServicesRepo {
   Future<void> createSubService(String providerId,Map<String,dynamic> data)=>_c.post('/services/admin/providers/$providerId/sub-services',body:data);
   Future<void> updateSubService(String id,Map<String,dynamic> data)=>_c.put('/services/admin/sub-services/$id',body:data);
   Future<void> deleteSubService(String id)=>_c.put('/services/admin/sub-services/$id',body:{'isActive':false});
+
+  // Multipart image upload — returns the public image URL stored on the entity.
+  Future<String> uploadProviderLogo(String id, String filePath) async {
+    final form = FormData.fromMap({
+      'image': await MultipartFile.fromFile(filePath, filename: filePath.split(RegExp(r'[\\/]')).last),
+    });
+    final r = await AdminApiClient.instance._dio.post('/services/admin/providers/$id/logo', data: form);
+    final d = (r.data as Map<String,dynamic>)['data'] as Map<String,dynamic>;
+    return d['logoUrl'] as String;
+  }
+  Future<String> uploadSubServiceImage(String id, String filePath) async {
+    final form = FormData.fromMap({
+      'image': await MultipartFile.fromFile(filePath, filename: filePath.split(RegExp(r'[\\/]')).last),
+    });
+    final r = await AdminApiClient.instance._dio.post('/services/admin/sub-services/$id/image', data: form);
+    final d = (r.data as Map<String,dynamic>)['data'] as Map<String,dynamic>;
+    return d['imageUrl'] as String;
+  }
 }
 
 class AdminB2BRepo {

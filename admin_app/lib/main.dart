@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:badges/badges.dart' as badges;
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'admin_core.dart';
 import 'admin_api.dart';
 import 'admin_notification_service.dart';
@@ -583,10 +585,35 @@ class _ServicesState extends State<ServicesScreen> {
         if(s is AdminServicesLoaded){
           return ListView.builder(padding:const EdgeInsets.all(AD.md),itemCount:s.providers.length,itemBuilder:(_,i){
             final p=s.providers[i];
-            return ACard(child:ExpansionTile(title:Row(children:[Text(p.displayName,style:AT.bodyM),const Spacer(),Switch.adaptive(value:p.isActive,onChanged:(v)=>ctx.read<AdminServicesBloc>().add(AdminServicesToggleProviderEvent(p.id,v)),activeColor:AC.success)]),
+            return ACard(child:ExpansionTile(
+              leading: _ImageAvatar(url: p.logoUrl, fallbackIcon: Icons.business_center_rounded),
+              title:Row(children:[
+                Expanded(child: Text(p.displayName, style: AT.bodyM, overflow: TextOverflow.ellipsis)),
+                IconButton(
+                  tooltip: 'تغيير شعار المزود',
+                  icon: const Icon(Icons.add_a_photo_rounded, color: AC.primary, size: 20),
+                  onPressed: () => _pickProviderLogo(ctx, p.id),
+                ),
+                Switch.adaptive(value:p.isActive,onChanged:(v)=>ctx.read<AdminServicesBloc>().add(AdminServicesToggleProviderEvent(p.id,v)),activeColor:AC.success),
+              ]),
               subtitle:Text('${p.category} — ${p.subServices.length} خدمات',style:AT.cap),
               children:[
-                ...p.subServices.map((sub)=>ListTile(title:Text(sub.nameAr,style:AT.body),subtitle:Text('ثابتة: ${sub.fixedFee} ج.م  |  نسبة: ${(sub.percentageFee*100).toStringAsFixed(1)}%',style:AT.cap),trailing:IconButton(icon:const Icon(Icons.edit_rounded,color:AC.primary,size:18),onPressed:()=>_showEditSub(ctx,sub)))),
+                ...p.subServices.map((sub)=>ListTile(
+                  leading: _ImageAvatar(url: sub.imageUrl, fallbackIcon: Icons.miscellaneous_services_rounded, size: 40),
+                  title: Text(sub.nameAr, style: AT.body),
+                  subtitle: Text('ثابتة: ${sub.fixedFee} ج.م  |  نسبة: ${(sub.percentageFee*100).toStringAsFixed(1)}%', style: AT.cap),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                      tooltip: 'تغيير صورة الخدمة',
+                      icon: const Icon(Icons.add_a_photo_outlined, color: AC.primary, size: 18),
+                      onPressed: () => _pickSubServiceImage(ctx, sub.id),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.edit_rounded, color: AC.primary, size: 18),
+                      onPressed: () => _showEditSub(ctx, sub),
+                    ),
+                  ]),
+                )),
                 ListTile(leading:const Icon(Icons.add_rounded,color:AC.primary),title:Text('إضافة خدمة فرعية',style:AT.body.copyWith(color:AC.primary)),onTap:()=>_showAddSub(ctx,p.id)),
               ]));
           });
@@ -617,6 +644,75 @@ class _ServicesState extends State<ServicesScreen> {
   void _showAddSub(BuildContext ctx,String providerId){
     final _name=TextEditingController(); final _nameAr=TextEditingController(); final _fixed=TextEditingController(text:'1.5'); final _pct=TextEditingController(text:'0'); String _cat='TELECOM';
     showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('إضافة خدمة فرعية'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:_name,decoration:const InputDecoration(labelText:'الاسم بالإنجليزية')),TextField(controller:_nameAr,decoration:const InputDecoration(labelText:'الاسم بالعربية')),TextField(controller:_fixed,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الرسوم الثابتة (ج.م)')),TextField(controller:_pct,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'النسبة المئوية (%)'))])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){if(_name.text.isEmpty||_nameAr.text.isEmpty)return;Navigator.pop(ctx);AdminServicesRepo().createSubService(providerId,{'name':_name.text,'nameAr':_nameAr.text,'category':_cat,'fixedFee':double.tryParse(_fixed.text)??0,'percentageFee':(double.tryParse(_pct.text)??0)/100}).then((_)=>ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent()));},child:const Text('إضافة'))])).then((_){_name.dispose();_nameAr.dispose();_fixed.dispose();_pct.dispose();});
+  }
+
+  Future<void> _pickProviderLogo(BuildContext ctx, String providerId) async {
+    final file = await _pickImage(ctx);
+    if (file == null) return;
+    try {
+      _showOk(ctx, 'جارٍ الرفع...');
+      await AdminServicesRepo().uploadProviderLogo(providerId, file);
+      if (!ctx.mounted) return;
+      _showOk(ctx, '✅ تم رفع الشعار');
+      ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+    } on AdminApiException catch (e) {
+      if (ctx.mounted) _showErr(ctx, e.message);
+    } catch (e) {
+      if (ctx.mounted) _showErr(ctx, 'فشل الرفع: $e');
+    }
+  }
+
+  Future<void> _pickSubServiceImage(BuildContext ctx, String subId) async {
+    final file = await _pickImage(ctx);
+    if (file == null) return;
+    try {
+      _showOk(ctx, 'جارٍ الرفع...');
+      await AdminServicesRepo().uploadSubServiceImage(subId, file);
+      if (!ctx.mounted) return;
+      _showOk(ctx, '✅ تم رفع الصورة');
+      ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+    } on AdminApiException catch (e) {
+      if (ctx.mounted) _showErr(ctx, e.message);
+    } catch (e) {
+      if (ctx.mounted) _showErr(ctx, 'فشل الرفع: $e');
+    }
+  }
+
+  Future<String?> _pickImage(BuildContext ctx) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: ctx, builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        ListTile(leading: const Icon(Icons.camera_alt_rounded, color: AC.primary), title: const Text('الكاميرا'), onTap: () => Navigator.pop(ctx, ImageSource.camera)),
+        ListTile(leading: const Icon(Icons.photo_library_rounded, color: AC.primary), title: const Text('المعرض'), onTap: () => Navigator.pop(ctx, ImageSource.gallery)),
+      ])),
+    );
+    if (source == null) return null;
+    final picker = ImagePicker();
+    final file = await picker.pickImage(source: source, imageQuality: 80, maxWidth: 1200);
+    return file?.path;
+  }
+}
+
+/// Small avatar that renders a network image (with cache) or falls back to an icon.
+class _ImageAvatar extends StatelessWidget {
+  final String? url; final IconData fallbackIcon; final double size;
+  const _ImageAvatar({required this.url, required this.fallbackIcon, this.size = 44});
+  @override
+  Widget build(BuildContext context) {
+    if (url == null || url!.isEmpty) {
+      return Container(
+        width: size, height: size,
+        decoration: BoxDecoration(color: AC.surfaceAlt, borderRadius: BorderRadius.circular(10)),
+        child: Icon(fallbackIcon, color: AC.primary, size: size * 0.55),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: CachedNetworkImage(
+        imageUrl: url!, width: size, height: size, fit: BoxFit.cover,
+        placeholder: (_, __) => Container(width: size, height: size, color: AC.surfaceAlt, child: const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))),
+        errorWidget: (_, __, ___) => Container(width: size, height: size, color: AC.errorBg, child: Icon(Icons.broken_image_rounded, color: AC.error, size: size * 0.5)),
+      ),
+    );
   }
 }
 

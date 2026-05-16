@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fythaniya/core/theme/app_theme.dart';
 import 'package:fythaniya/core/constants/constants.dart';
 import 'package:fythaniya/data/models/models.dart';
@@ -218,6 +219,24 @@ class SuccessSheet extends StatelessWidget {
     ]));
 }
 
+// Network-image thumbnail with cache + fallback. Used in selectors for provider logos / sub-service images.
+class _ProviderImage extends StatelessWidget {
+  final String? url; final String category; final double size;
+  const _ProviderImage({required this.url, required this.category, this.size = 40});
+  @override
+  Widget build(BuildContext context) {
+    if (url == null || url!.isEmpty) return CategoryIcon(category: category, size: size * 0.55);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: CachedNetworkImage(
+        imageUrl: url!, width: size, height: size, fit: BoxFit.cover,
+        placeholder: (_, __) => SizedBox(width: size, height: size, child: const Center(child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))),
+        errorWidget: (_, __, ___) => CategoryIcon(category: category, size: size * 0.55),
+      ),
+    );
+  }
+}
+
 // ── Provider Selector ──────────────────────────────────────
 class ProviderSelector extends StatelessWidget {
   final List<ServiceProviderModel> providers;
@@ -226,13 +245,14 @@ class ProviderSelector extends StatelessWidget {
   const ProviderSelector({super.key,required this.providers,this.selected,required this.onSelect});
   @override Widget build(BuildContext context)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
     Padding(padding:const EdgeInsets.only(bottom:D.sm),child:Text(S.selectProv,style:TS.cap)),
-    SizedBox(height:90,child:ListView.builder(scrollDirection:Axis.horizontal,itemCount:providers.length,itemBuilder:(_,i){
+    SizedBox(height:108,child:ListView.builder(scrollDirection:Axis.horizontal,itemCount:providers.length,itemBuilder:(_,i){
       final p=providers[i];final isSel=selected?.id==p.id;
       return GestureDetector(onTap:()=>onSelect(p),child:AnimatedContainer(duration:const Duration(milliseconds:180),
-        width:80,margin:const EdgeInsets.only(right:10),
-        decoration:BoxDecoration(color:isSel?AppColors.infoBg:AppColors.card,borderRadius:BorderRadius.circular(D.r12),border:Border.all(color:isSel?AppColors.primary:AppColors.border,width:isSel?1.5:1)),
+        width:90,margin:const EdgeInsets.only(right:10),padding:const EdgeInsets.symmetric(vertical:8),
+        decoration:BoxDecoration(color:isSel?AppColors.infoBg:AppColors.card,borderRadius:BorderRadius.circular(D.r16),border:Border.all(color:isSel?AppColors.primary:AppColors.border,width:isSel?1.5:1)),
         child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
-          CategoryIcon(category:p.category,size:18),const SizedBox(height:6),
+          _ProviderImage(url: p.logoUrl, category: p.category, size: 44),
+          const SizedBox(height:6),
           Text(p.displayName,style:TS.cap.copyWith(color:isSel?AppColors.primary:AppColors.textSec),textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis),
         ])));
     })),
@@ -249,10 +269,17 @@ class SubServiceSelector extends StatelessWidget {
     Text('نوع الخدمة',style:TS.cap),const SizedBox(height:D.sm),
     SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:subServices.map((s){
       final isSel=selected?.id==s.id;
+      final hasImg = s.imageUrl != null && s.imageUrl!.isNotEmpty;
       return GestureDetector(onTap:()=>onSelect(s),child:AnimatedContainer(duration:const Duration(milliseconds:150),
-        margin:const EdgeInsets.only(left:8),padding:const EdgeInsets.symmetric(horizontal:16,vertical:10),
+        margin:const EdgeInsets.only(left:8),padding:EdgeInsets.symmetric(horizontal: hasImg ? 12 : 16, vertical: hasImg ? 6 : 10),
         decoration:BoxDecoration(color:isSel?AppColors.primary:AppColors.card,borderRadius:BorderRadius.circular(20),border:Border.all(color:isSel?AppColors.primary:AppColors.border)),
-        child:Text(s.nameAr,style:TS.cap.copyWith(color:isSel?Colors.white:AppColors.textSec,fontWeight:FontWeight.w600))));
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (hasImg) ...[
+            ClipRRect(borderRadius: BorderRadius.circular(8), child: CachedNetworkImage(imageUrl: s.imageUrl!, width: 26, height: 26, fit: BoxFit.cover, errorWidget: (_,__,___) => const SizedBox.shrink())),
+            const SizedBox(width: 8),
+          ],
+          Text(s.nameAr,style:TS.cap.copyWith(color:isSel?Colors.white:AppColors.textSec,fontWeight:FontWeight.w600)),
+        ])));
     }).toList())),
   ]);
 }

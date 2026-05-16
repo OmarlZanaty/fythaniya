@@ -281,16 +281,39 @@ class AdminNotification {
 }
 
 class ServiceProvider {
-  final String id,name,displayName,category; final bool isActive; final int sortOrder; final double commissionRate; final List<SubService> subServices;
-  const ServiceProvider({required this.id,required this.name,required this.displayName,required this.category,required this.isActive,required this.sortOrder,required this.commissionRate,this.subServices=const[]});
-  factory ServiceProvider.fromJson(Map<String,dynamic> j)=>ServiceProvider(id:j['id'] as String,name:j['name'] as String,displayName:j['displayName'] as String??j['name'] as String,category:j['category'] as String,isActive:(j['isActive'] as bool?)??true,sortOrder:(j['sortOrder'] as int?)??0,commissionRate:double.tryParse((j['commissionRate']??'0').toString())??0,subServices:(j['subServices'] as List<dynamic>?)?.map((s)=>SubService.fromJson(s as Map<String,dynamic>)).toList()??[]);
+  final String id,name,displayName,category; final bool isActive; final int sortOrder; final double commissionRate;
+  final String? logoUrl;
+  final List<SubService> subServices;
+  const ServiceProvider({required this.id,required this.name,required this.displayName,required this.category,required this.isActive,required this.sortOrder,required this.commissionRate,this.logoUrl,this.subServices=const[]});
+  factory ServiceProvider.fromJson(Map<String,dynamic> j)=>ServiceProvider(
+    id:j['id'] as String,name:j['name'] as String,
+    displayName:(j['displayName'] as String?)??(j['name'] as String),
+    category:j['category'] as String,
+    isActive:(j['isActive'] as bool?)??true,
+    sortOrder:(j['sortOrder'] as int?)??0,
+    commissionRate:double.tryParse((j['commissionRate']??'0').toString())??0,
+    logoUrl:j['logoUrl'] as String?,
+    subServices:(j['subServices'] as List<dynamic>?)?.map((s)=>SubService.fromJson(s as Map<String,dynamic>)).toList()??[],
+  );
 }
 
 class SubService {
   final String id,serviceProviderId,name,nameAr,category; final bool isActive;
   final double fixedFee,percentageFee; final double? minAmount,maxAmount;
-  const SubService({required this.id,required this.serviceProviderId,required this.name,required this.nameAr,required this.category,required this.isActive,required this.fixedFee,required this.percentageFee,this.minAmount,this.maxAmount});
-  factory SubService.fromJson(Map<String,dynamic> j)=>SubService(id:j['id'] as String,serviceProviderId:j['serviceProviderId'] as String,name:j['name'] as String,nameAr:j['nameAr'] as String,category:j['category'] as String,isActive:(j['isActive'] as bool?)??true,fixedFee:double.tryParse((j['fixedFee']??'0').toString())??0,percentageFee:double.tryParse((j['percentageFee']??'0').toString())??0,minAmount:j['minAmount']!=null?double.tryParse(j['minAmount'].toString()):null,maxAmount:j['maxAmount']!=null?double.tryParse(j['maxAmount'].toString()):null);
+  final String? imageUrl;
+  final bool requiresPayLater;
+  const SubService({required this.id,required this.serviceProviderId,required this.name,required this.nameAr,required this.category,required this.isActive,required this.fixedFee,required this.percentageFee,this.minAmount,this.maxAmount,this.imageUrl,this.requiresPayLater=false});
+  factory SubService.fromJson(Map<String,dynamic> j)=>SubService(
+    id:j['id'] as String,serviceProviderId:j['serviceProviderId'] as String,
+    name:j['name'] as String,nameAr:j['nameAr'] as String,category:j['category'] as String,
+    isActive:(j['isActive'] as bool?)??true,
+    fixedFee:double.tryParse((j['fixedFee']??'0').toString())??0,
+    percentageFee:double.tryParse((j['percentageFee']??'0').toString())??0,
+    minAmount:j['minAmount']!=null?double.tryParse(j['minAmount'].toString()):null,
+    maxAmount:j['maxAmount']!=null?double.tryParse(j['maxAmount'].toString()):null,
+    imageUrl:j['imageUrl'] as String?,
+    requiresPayLater:(j['requiresPayLater'] as bool?)??false,
+  );
 }
 
 class AdminUser {

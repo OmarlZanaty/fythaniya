@@ -661,24 +661,32 @@ class _ServicesState extends State<ServicesScreen> {
             final p=s.providers[i];
             return ACard(child:ExpansionTile(
               leading: _ImageAvatar(url: p.logoUrl, fallbackIcon: Icons.business_center_rounded),
-              title:Row(children:[
+              // Title row: keep only the name + a compact Switch + a 3-dot menu.
+              // ExpansionTile gives the title ~187px after reserving leading + chevron,
+              // so we can't fit Text + 3 IconButtons + Switch inline — overflows by ~17px.
+              title: Row(children: [
                 Expanded(child: Text(p.displayName, style: AT.bodyM, overflow: TextOverflow.ellipsis)),
-                IconButton(
-                  tooltip: 'تغيير شعار المزود',
-                  icon: const Icon(Icons.add_a_photo_rounded, color: AC.primary, size: 20),
-                  onPressed: () => _pickProviderLogo(ctx, p.id),
+                Transform.scale(scale: 0.85, child: Switch.adaptive(
+                  value: p.isActive,
+                  onChanged: (v) => ctx.read<AdminServicesBloc>().add(AdminServicesToggleProviderEvent(p.id, v)),
+                  activeColor: AC.success,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                )),
+                PopupMenuButton<String>(
+                  tooltip: 'إجراءات',
+                  icon: const Icon(Icons.more_vert_rounded, size: 20, color: AC.textSec),
+                  padding: EdgeInsets.zero,
+                  onSelected: (v) {
+                    if (v == 'logo')   _pickProviderLogo(ctx, p.id);
+                    if (v == 'edit')   _showEditProvider(ctx, p);
+                    if (v == 'delete') _confirmDeleteProvider(ctx, p);
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'logo',   child: ListTile(dense: true, leading: Icon(Icons.add_a_photo_rounded, color: AC.primary), title: Text('تغيير الشعار'))),
+                    const PopupMenuItem(value: 'edit',   child: ListTile(dense: true, leading: Icon(Icons.edit_rounded, color: AC.primary), title: Text('تعديل'))),
+                    const PopupMenuItem(value: 'delete', child: ListTile(dense: true, leading: Icon(Icons.delete_outline_rounded, color: AC.error), title: Text('حذف', style: TextStyle(color: AC.error)))),
+                  ],
                 ),
-                IconButton(
-                  tooltip: 'تعديل المزود',
-                  icon: const Icon(Icons.edit_rounded, color: AC.primary, size: 20),
-                  onPressed: () => _showEditProvider(ctx, p),
-                ),
-                IconButton(
-                  tooltip: 'حذف المزود',
-                  icon: const Icon(Icons.delete_outline_rounded, color: AC.error, size: 20),
-                  onPressed: () => _confirmDeleteProvider(ctx, p),
-                ),
-                Switch.adaptive(value:p.isActive,onChanged:(v)=>ctx.read<AdminServicesBloc>().add(AdminServicesToggleProviderEvent(p.id,v)),activeColor:AC.success),
               ]),
               subtitle:Text('${p.category} — ${p.subServices.length} خدمات',style:AT.cap),
               children:[
@@ -686,23 +694,23 @@ class _ServicesState extends State<ServicesScreen> {
                   leading: _ImageAvatar(url: sub.imageUrl, fallbackIcon: Icons.miscellaneous_services_rounded, size: 40),
                   title: Text(sub.nameAr, style: AT.body),
                   subtitle: Text('ثابتة: ${sub.fixedFee} ج.م  |  نسبة: ${(sub.percentageFee*100).toStringAsFixed(1)}%', style: AT.cap),
-                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                    IconButton(
-                      tooltip: 'تغيير صورة الخدمة',
-                      icon: const Icon(Icons.add_a_photo_outlined, color: AC.primary, size: 18),
-                      onPressed: () => _pickSubServiceImage(ctx, sub.id),
-                    ),
-                    IconButton(
-                      tooltip: 'تعديل الخدمة',
-                      icon: const Icon(Icons.edit_rounded, color: AC.primary, size: 18),
-                      onPressed: () => _showEditSub(ctx, sub),
-                    ),
-                    IconButton(
-                      tooltip: 'حذف الخدمة',
-                      icon: const Icon(Icons.delete_outline_rounded, color: AC.error, size: 18),
-                      onPressed: () => _confirmDeleteSub(ctx, sub),
-                    ),
-                  ]),
+                  // Sub-service actions also live in an overflow menu so the trailing
+                  // area stays narrow regardless of screen width.
+                  trailing: PopupMenuButton<String>(
+                    tooltip: 'إجراءات',
+                    icon: const Icon(Icons.more_vert_rounded, size: 20, color: AC.textSec),
+                    padding: EdgeInsets.zero,
+                    onSelected: (v) {
+                      if (v == 'image')  _pickSubServiceImage(ctx, sub.id);
+                      if (v == 'edit')   _showEditSub(ctx, sub);
+                      if (v == 'delete') _confirmDeleteSub(ctx, sub);
+                    },
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(value: 'image',  child: ListTile(dense: true, leading: Icon(Icons.add_a_photo_outlined, color: AC.primary), title: Text('تغيير الصورة'))),
+                      const PopupMenuItem(value: 'edit',   child: ListTile(dense: true, leading: Icon(Icons.edit_rounded, color: AC.primary), title: Text('تعديل'))),
+                      const PopupMenuItem(value: 'delete', child: ListTile(dense: true, leading: Icon(Icons.delete_outline_rounded, color: AC.error), title: Text('حذف', style: TextStyle(color: AC.error)))),
+                    ],
+                  ),
                 )),
                 ListTile(leading:const Icon(Icons.add_rounded,color:AC.primary),title:Text('إضافة خدمة فرعية',style:AT.body.copyWith(color:AC.primary)),onTap:()=>_showAddSub(ctx,p.id)),
               ]));

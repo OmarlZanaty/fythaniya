@@ -152,9 +152,7 @@ class AdminClientsRepo {
       total: (pagination['total'] as int?) ?? list.length,
       page: (pagination['page'] as int?) ?? 1,
       limit: (pagination['limit'] as int?) ?? 20,
-      totalPages: (pagination['totalPages'] as int?) ?? 1,
       hasNext: (pagination['hasNextPage'] as bool?) ?? false,
-      hasPrev: (pagination['hasPrevPage'] as bool?) ?? false,
     );
   }
   Future<Map<String,dynamic>> addBalance(String userId, double amount, {String? note}) async {

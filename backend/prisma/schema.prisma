@@ -37,6 +37,7 @@ model User {
   transactions       Transaction[]
   userNotifications  UserNotification[]
   vaultDocuments     VaultDocument[]
+  requestMessages    RequestMessage[]
 
   @@map("users")
 }
@@ -56,6 +57,7 @@ model Admin {
   auditLogs          AuditLog[]
   escalations        Escalation[]
   processedRequests  Request[]           @relation("Processor")
+  requestMessages    RequestMessage[]
 
   @@map("admins")
 }
@@ -74,6 +76,7 @@ model ServiceProvider {
   requests       Request[]
   subServices    SubService[]
   transactions   Transaction[]
+  paymentNumbers PaymentNumber[]
 
   @@map("service_providers")
 }
@@ -117,6 +120,16 @@ model Request {
   metadata          String?
   proofImageUrl     String?
   paymentMethod     String?
+  // Smart-billing: admin sets the bill amount AFTER receiving the request
+  billingNumber     String?
+  billingType       String?
+  adminSetAmount    Decimal? @db.Decimal(12, 2)
+  // Bank transfer fields
+  receiverName      String?
+  bankName          String?
+  bankAccount       String?
+  // InstaPay
+  instapayId        String?
   processorId       String?
   adminNote         String?
   externalRef       String?
@@ -127,6 +140,7 @@ model Request {
   auditLogs         AuditLog[]
   b2bPayLater       B2BPayLater?
   escalations       Escalation[]
+  messages          RequestMessage[]
   processor         Admin?           @relation("Processor", fields: [processorId], references: [id])
   serviceProvider   ServiceProvider? @relation(fields: [serviceProviderId], references: [id])
   subService        SubService?      @relation(fields: [subServiceId], references: [id])
@@ -137,6 +151,53 @@ model Request {
   @@index([userId])
   @@index([slaDeadline])
   @@map("requests")
+}
+
+// Admin-managed wallet/InstaPay/bank numbers that clients are shown when they need to make an external payment.
+model PaymentNumber {
+  id                String              @id @default(uuid())
+  type              PaymentNumberType
+  number            String
+  label             String
+  serviceProviderId String?
+  isActive          Boolean             @default(true)
+  sortOrder         Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  serviceProvider   ServiceProvider?    @relation(fields: [serviceProviderId], references: [id])
+
+  @@index([type, isActive])
+  @@map("payment_numbers")
+}
+
+// In-app chat thread between a client and admins, scoped to one request.
+model RequestMessage {
+  id        String   @id @default(uuid())
+  requestId String
+  body      String
+  // Sender is either a userId or adminId — exactly one is set.
+  userId    String?
+  adminId   String?
+  createdAt DateTime @default(now())
+  isRead    Boolean  @default(false)
+  request   Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id])
+  admin     Admin?   @relation(fields: [adminId], references: [id])
+
+  @@index([requestId, createdAt])
+  @@map("request_messages")
+}
+
+// Dynamic app-level settings (brand color, greeting, maintenance flag, etc.) — single key/value table.
+model AdminSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  type      String   @default("string") // "string" | "json" | "bool" | "color" | "number"
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@map("admin_settings")
 }
 
 model Transaction {
@@ -395,10 +456,13 @@ enum AdminRole {
 
 enum RequestStatus {
   PENDING
+  AWAITING_PAYMENT
+  PAID
   ASSIGNED
   IN_PROGRESS
   COMPLETED
   FAILED
+  REJECTED
   REFUNDED
   ESCALATED
 }
@@ -412,6 +476,23 @@ enum RequestType {
   WALLET_TOPUP
   PAY_LATER_ACTIVATION
   VODAFONE_CASH_DEPOSIT
+  INSTAPAY_DEPOSIT
+  BANK_TRANSFER
+  CUSTOM
+}
+
+enum PaymentNumberType {
+  WALLET
+  INSTAPAY
+  BANK
+}
+
+enum ServiceType {
+  RECHARGE
+  BILL
+  INSTAPAY
+  TRANSFER
+  CUSTOM
 }
 
 enum TransactionStatus {

@@ -73,18 +73,33 @@ router.put('/change-password',
 
 router.post('/requests',
   [
-    body('serviceProviderId').notEmpty(),
+    body('serviceProviderId').optional(),
     body('subServiceId').optional(),
-    body('type').isIn(['MOBILE_RECHARGE','BILL_PAYMENT','INTERNET_RECHARGE','TRANSFER','VODAFONE_CASH_DEPOSIT']),
-    body('amount').isFloat({ min: 1, max: 50000 }).withMessage('المبلغ يجب أن يكون بين 1 و 50000 ج.م'),
+    body('type').isIn(['MOBILE_RECHARGE','BILL_PAYMENT','INTERNET_RECHARGE','TRANSFER','VODAFONE_CASH_DEPOSIT','INSTAPAY_DEPOSIT','BANK_TRANSFER','CUSTOM']),
+    body('amount').optional().isFloat({ min: 0, max: 1000000 }),
     body('accountNumber').optional(),
     body('phoneNumber').optional(),
     body('paymentMethod').optional().isString(),
     body('proofImageUrl').optional().isString(),
+    body('billingNumber').optional().isString(),
+    body('billingType').optional().isString(),
+    body('receiverName').optional().isString(),
+    body('bankName').optional().isString(),
+    body('bankAccount').optional().isString(),
+    body('instapayId').optional().isString(),
   ], validate,
   async (req, res, next) => {
     try {
-      const { serviceProviderId, subServiceId, type, amount, accountNumber, phoneNumber, paymentMethod, proofImageUrl } = req.body;
+      const { serviceProviderId, subServiceId, type, accountNumber, phoneNumber, paymentMethod, proofImageUrl,
+              billingNumber, billingType, receiverName, bankName, bankAccount, instapayId } = req.body;
+      let { amount } = req.body;
+      // BILL_PAYMENT may come in with no amount (admin will set it later); everything else needs a positive amount.
+      const isBillPending = type === 'BILL_PAYMENT' && (amount == null || Number(amount) === 0);
+      if (!isBillPending) {
+        const a = Number(amount);
+        if (!isFinite(a) || a < 1 || a > 1000000) return apiResponse.error(res, 'المبلغ غير صحيح', 400);
+      }
+      amount = isBillPending ? 0 : Number(amount);
       const io = req.app.get('io');
 
       // Sub-service gating + fee
@@ -104,24 +119,72 @@ router.post('/requests',
       const slaMinutes = isCritical ? 5 : 15;
       const slaDeadline = new Date(Date.now() + slaMinutes * 60000);
 
+      // Balance enforcement for instant-payment types:
+      // If user has enough balance, auto-deduct + mark COMPLETED. Otherwise create PENDING (admin will manually handle external payment).
+      const balanceCheckTypes = ['INSTAPAY_DEPOSIT', 'BANK_TRANSFER'];
+      let autoDeductHandled = false;
+      let initialStatus = 'PENDING';
+      if (balanceCheckTypes.includes(type)) {
+        const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { walletBalance: true } });
+        if (Number(me.walletBalance) >= totalAmount) {
+          // We'll create the request as COMPLETED in a transaction below.
+          initialStatus = 'PENDING'; // will flip after transaction
+          autoDeductHandled = true;
+        } else if (!proofImageUrl) {
+          // Insufficient balance and no external-payment proof → still create the request as PENDING (the user app shows payment numbers + uploads proof later).
+          initialStatus = 'PENDING';
+        }
+      }
+
       const request = await prisma.request.create({
         data: {
-          userId: req.user.id, serviceProviderId,
+          userId: req.user.id, serviceProviderId: serviceProviderId || null,
           subServiceId: subServiceId || null,
-          type, status: 'PENDING',
+          type, status: initialStatus,
           amount, fee, totalAmount,
           accountNumber: accountNumber || null,
           phoneNumber: phoneNumber || null,
           paymentMethod: paymentMethod || null,
           proofImageUrl: proofImageUrl || null,
+          billingNumber: billingNumber || null,
+          billingType: billingType || null,
+          receiverName: receiverName || null,
+          bankName: bankName || null,
+          bankAccount: bankAccount || null,
+          instapayId: instapayId || null,
           slaDeadline,
         },
         include: { serviceProvider: true, subService: true },
       });
 
+      // Auto-deduct path (InstaPay/BankTransfer with sufficient wallet balance)
+      let finalRequest = request;
+      if (autoDeductHandled) {
+        await prisma.$transaction(async (tx) => {
+          const dec = await tx.user.updateMany({
+            where: { id: req.user.id, walletBalance: { gte: totalAmount } },
+            data: { walletBalance: { decrement: totalAmount } },
+          });
+          if (dec.count === 0) {
+            // Race lost — revert to AWAITING_PAYMENT (user must pay externally)
+            await tx.request.update({ where: { id: request.id }, data: { status: 'AWAITING_PAYMENT' } });
+            return;
+          }
+          await tx.request.update({
+            where: { id: request.id },
+            data: { status: 'COMPLETED', completedAt: new Date() },
+          });
+          await tx.transaction.create({
+            data: { userId: req.user.id, requestId: request.id, amount, fee, totalAmount,
+              status: 'SUCCESS', paymentMethod: 'WALLET_AUTODEDUCT' },
+          });
+        });
+        finalRequest = await prisma.request.findUnique({ where: { id: request.id }, include: { serviceProvider: true, subService: true } });
+      }
+
       await notifyAdmins(
         `🔔 طلب جديد — ${type}`,
-        `${totalAmount} ج.م — ${accountNumber || phoneNumber || ''}`,
+        `${totalAmount} ج.م — ${accountNumber || phoneNumber || billingNumber || ''}`,
         isCritical ? 'CRITICAL' : 'HIGH',
         request.id, null,
         { requestId: request.id, type, amount: String(totalAmount) }
@@ -131,7 +194,12 @@ router.post('/requests',
         userId: req.user.id, slaDeadline,
       });
 
-      return apiResponse.success(res, request, 'تم تقديم الطلب', 201);
+      if (autoDeductHandled && finalRequest.status === 'COMPLETED') {
+        emitToUser(io, req.user.id, 'request_completed', { requestId: request.id, status: 'COMPLETED' });
+        await notifyUser(req.user.id, '✅ تم التنفيذ تلقائياً', `تم خصم ${totalAmount} ج.م من محفظتك وتنفيذ الطلب`, 'HIGH', { requestId: request.id });
+      }
+
+      return apiResponse.success(res, finalRequest, 'تم تقديم الطلب', 201);
     } catch (err) { next(err); }
   }
 );

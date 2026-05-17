@@ -15,6 +15,7 @@ const servicesRouter= require('./modules/services/services.routes');
 const b2bRouter     = require('./modules/b2b/b2b.routes');
 const adminRouter   = require('./modules/admin/admin.routes');
 const userRouter    = require('./modules/user_routes');
+const platformRouter= require('./modules/platform/platform.routes');
 const { startJobs } = require('./jobs/jobs');
 
 const app    = express();
@@ -91,6 +92,7 @@ app.use('/api/v1/services', apiLimiter, servicesRouter);
 app.use('/api/v1/b2b',      apiLimiter, b2bRouter);
 app.use('/api/v1/admin',    adminLimiter, adminRouter);
 app.use('/api/v1/user',     apiLimiter, userRouter);
+app.use('/api/v1',          apiLimiter, platformRouter);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use('*', (req, res) => res.status(404).json({ success: false, message: `Not found: ${req.method} ${req.originalUrl}` }));

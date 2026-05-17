@@ -1,12 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:local_auth_android/local_auth_android.dart';
-import 'package:local_auth_darwin/local_auth_darwin.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Admin-side biometric wrapper. Same API as the user app's BiometricService,
-/// but stores its "enabled" flag under a separate key.
+/// Admin-side biometric wrapper. Uses only the stable core `local_auth` API
+/// (LocalAuthentication + AuthenticationOptions) — no per-platform message
+/// classes, so it builds cleanly across local_auth 2.x point versions.
 class AdminBiometricService {
   AdminBiometricService._();
   static final AdminBiometricService instance = AdminBiometricService._();
@@ -14,6 +13,7 @@ class AdminBiometricService {
   final LocalAuthentication _auth = LocalAuthentication();
   static const _enabledKey = 'fyt_admin_biometric_enabled';
 
+  /// True if the hardware exists and the user has at least one biometric enrolled.
   Future<bool> canUseBiometrics() async {
     try {
       final supported = await _auth.isDeviceSupported();
@@ -31,12 +31,16 @@ class AdminBiometricService {
     }
   }
 
+  /// Pick the strongest available biometric for the UI subtitle.
+  /// Uses string matching on the enum's toString so we don't depend on the
+  /// `BiometricType` enum name (which moved between local_auth versions).
   Future<String> bestAvailableLabel() async {
     try {
       final list = await _auth.getAvailableBiometrics();
-      if (list.contains(BiometricType.face)) return 'الوجه';
-      if (list.contains(BiometricType.fingerprint)) return 'البصمة';
-      if (list.contains(BiometricType.iris)) return 'القزحية';
+      final s = list.map((e) => e.toString().toLowerCase()).join(',');
+      if (s.contains('face')) return 'الوجه';
+      if (s.contains('fingerprint')) return 'البصمة';
+      if (s.contains('iris')) return 'القزحية';
       return 'القياس الحيوي';
     } catch (_) { return 'القياس الحيوي'; }
   }
@@ -51,34 +55,18 @@ class AdminBiometricService {
     await p.setBool(_enabledKey, v);
   }
 
+  /// Shows the system biometric prompt. Returns true on success, false on
+  /// cancel/error. We allow the device-credential fallback (PIN/pattern) so
+  /// users without enrolled biometrics can still pass.
   Future<bool> authenticate({String reason = 'تأكيد هويتك للدخول إلى لوحة الإدارة'}) async {
     try {
       return await _auth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(
-          biometricOnly: false,
-          stickyAuth: true,
-          useErrorDialogs: true,
+          biometricOnly: false,   // allow PIN/pattern as a fallback
+          stickyAuth: true,       // survive app backgrounding during the prompt
+          useErrorDialogs: true,  // let the system render hardware-error UI
         ),
-        authMessages: const <AuthMessages>[
-          AndroidAuthMessages(
-            signInTitle: 'تأكيد الهوية',
-            biometricHint: 'استخدم بصمتك أو وجهك',
-            biometricNotRecognized: 'لم يتم التعرف عليك، حاول مجدداً',
-            biometricSuccess: 'تم التحقق',
-            cancelButton: 'إلغاء',
-            deviceCredentialsRequiredTitle: 'القياس الحيوي غير مفعل',
-            deviceCredentialsSetupDescription: 'يرجى إعداد بصمة أو رمز قفل في إعدادات الجهاز',
-            goToSettingsButton: 'الإعدادات',
-            goToSettingsDescription: 'يلزم إعداد القياس الحيوي للاستمرار',
-          ),
-          IOSAuthMessages(
-            lockOut: 'تم قفل البصمة، أعد المحاولة لاحقاً',
-            goToSettingsButton: 'الإعدادات',
-            goToSettingsDescription: 'يلزم إعداد القياس الحيوي للاستمرار',
-            cancelButton: 'إلغاء',
-          ),
-        ],
       );
     } on PlatformException catch (e) {
       debugPrint('[AdminBiometric] authenticate failed: ${e.code} ${e.message}');

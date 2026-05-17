@@ -68,6 +68,8 @@ class _HomeContent extends StatelessWidget {
     _Svc(S.gas,        'GAS',          Icons.local_fire_department_rounded,  AppColors.gas,         'bill_gas'),
     _Svc(S.water,      'WATER',        Icons.water_drop_rounded,            AppColors.water,       'bill_water'),
     _Svc(S.internet,   'INTERNET',     Icons.wifi_rounded,                  AppColors.internet,    'bill_internet'),
+    _Svc('InstaPay',   'INSTAPAY',     Icons.bolt_rounded,                  AppColors.primaryLight,'instapay'),
+    _Svc('تحويل بنكي', 'BANK',         Icons.account_balance_rounded,        AppColors.b2b,         'bank_transfer'),
     _Svc('شركات',      'B2B',          Icons.business_rounded,              AppColors.b2b,         'b2b'),
     _Svc('فودافون كاش','VC',           Icons.account_balance_wallet_rounded,AppColors.telecom,     'vodafone_cash'),
     _Svc('مكافآت',     'REWARDS',      Icons.stars_rounded,                 AppColors.accent,      'rewards'),
@@ -149,12 +151,16 @@ class _HomeContent extends StatelessWidget {
                   return;
                 }
                 if (r=='vodafone_cash') { context.push(AppRoutes.bill, extra:'TELECOM'); return; }
-                if (r=='pay_later') { context.push(AppRoutes.payLater); return; }
+                if (r=='pay_later')      { context.push(AppRoutes.payLater); return; }
+                if (r=='instapay')       { context.push(AppRoutes.instapay); return; }
+                if (r=='bank_transfer')  { context.push(AppRoutes.bankTransfer); return; }
                 if(r=='recharge') context.push(AppRoutes.recharge);
                 else if(r=='wallet') context.push(AppRoutes.wallet);
                 else if(r=='rewards') context.push(AppRoutes.rewards);
                 else if(r=='notifs') context.push(AppRoutes.notifs);
                 else if(r=='b2b') context.push(state.user.isB2B?AppRoutes.b2bDash:AppRoutes.b2bApply);
+                // Bills now route to the smart-billing flow (admin sets amount)
+                else if(r.startsWith('bill_')) context.push(AppRoutes.smartBilling, extra:s.cat);
                 else context.push(AppRoutes.bill, extra:s.cat);
               },child:Opacity(opacity: gated ? 0.4 : 1.0, child: Column(mainAxisSize:MainAxisSize.min,children:[
                 Container(width:56,height:56,decoration:BoxDecoration(color:s.color.withOpacity(0.1),borderRadius:BorderRadius.circular(14),border:Border.all(color:s.color.withOpacity(0.2))),child:Icon(s.icon,color:s.color,size:26)),

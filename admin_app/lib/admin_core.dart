@@ -188,6 +188,9 @@ class AdminRoutes {
   static const String notifs     = '/notifications';
   static const String settings   = '/settings';
   static const String reports    = '/reports';
+  static const String paymentNumbers = '/payment-numbers';
+  static const String clients    = '/clients';
+  static const String appSettings= '/app-settings';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -212,6 +215,8 @@ class RequestItem {
   final String id,type,status;
   final double amount,fee,totalAmount;
   final String? accountNumber,phoneNumber,adminNote,externalRef,proofImageUrl,paymentMethod;
+  final String? billingNumber, billingType, receiverName, bankName, bankAccount, instapayId;
+  final double? adminSetAmount;
   final String? processorId;
   final DateTime createdAt;
   final DateTime? completedAt,slaDeadline;
@@ -221,6 +226,7 @@ class RequestItem {
   const RequestItem({required this.id,required this.type,required this.status,
     required this.amount,required this.fee,required this.totalAmount,
     this.accountNumber,this.phoneNumber,this.adminNote,this.externalRef,this.proofImageUrl,this.paymentMethod,
+    this.billingNumber,this.billingType,this.receiverName,this.bankName,this.bankAccount,this.instapayId,this.adminSetAmount,
     this.processorId,required this.createdAt,this.completedAt,this.slaDeadline,
     this.user,this.serviceProvider,this.subService,this.processor,this.slaBreached=false});
 
@@ -232,6 +238,13 @@ class RequestItem {
     accountNumber:j['accountNumber'] as String?,phoneNumber:j['phoneNumber'] as String?,
     adminNote:j['adminNote'] as String?,externalRef:j['externalRef'] as String?,
     proofImageUrl:j['proofImageUrl'] as String?,paymentMethod:j['paymentMethod'] as String?,
+    billingNumber:j['billingNumber'] as String?,
+    billingType:j['billingType'] as String?,
+    receiverName:j['receiverName'] as String?,
+    bankName:j['bankName'] as String?,
+    bankAccount:j['bankAccount'] as String?,
+    instapayId:j['instapayId'] as String?,
+    adminSetAmount:j['adminSetAmount']!=null?double.tryParse(j['adminSetAmount'].toString()):null,
     processorId:j['processorId'] as String?,
     createdAt:DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now(),
     completedAt:j['completedAt']!=null?DateTime.tryParse(j['completedAt'] as String):null,

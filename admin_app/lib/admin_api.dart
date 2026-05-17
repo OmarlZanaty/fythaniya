@@ -108,6 +108,84 @@ class AdminServicesRepo {
   }
 }
 
+// ── Payment Numbers ───────────────────────────────────────
+class AdminPaymentNumbersRepo {
+  final _c = AdminApiClient.instance;
+  Future<List<Map<String,dynamic>>> list() async {
+    final res = await _c.get('/admin/payment-numbers');
+    return ((res['data'] as List<dynamic>?) ?? []).cast<Map<String,dynamic>>();
+  }
+  Future<Map<String,dynamic>> create(Map<String,dynamic> body) async {
+    final res = await _c.post('/admin/payment-numbers', body: body);
+    return res['data'] as Map<String,dynamic>;
+  }
+  Future<void> update(String id, Map<String,dynamic> body) =>
+    _c.put('/admin/payment-numbers/$id', body: body);
+  Future<void> delete(String id) async {
+    try { await _c._dio.delete('/admin/payment-numbers/$id'); }
+    on DioException catch (e) { throw AdminApiException.fromDio(e); }
+  }
+}
+
+// ── Admin Settings ────────────────────────────────────────
+class AdminSettingsRepo {
+  final _c = AdminApiClient.instance;
+  Future<List<Map<String,dynamic>>> list() async {
+    final res = await _c.get('/admin/settings');
+    return ((res['data'] as List<dynamic>?) ?? []).cast<Map<String,dynamic>>();
+  }
+  Future<void> updateBulk(Map<String,dynamic> settings) =>
+    _c.put('/admin/settings', body: {'settings': settings});
+}
+
+// ── Admin Clients ─────────────────────────────────────────
+class AdminClientsRepo {
+  final _c = AdminApiClient.instance;
+  Future<PagedData<Map<String,dynamic>>> search({String? search, int page = 1}) async {
+    final res = await _c.get('/admin/clients', params: {
+      'page': page, 'limit': 20, if (search != null && search.isNotEmpty) 'search': search,
+    });
+    final list = ((res['data'] as List<dynamic>?) ?? []).cast<Map<String,dynamic>>();
+    final pagination = (res['pagination'] as Map<String,dynamic>?) ?? {};
+    return PagedData<Map<String,dynamic>>(
+      data: list,
+      total: (pagination['total'] as int?) ?? list.length,
+      page: (pagination['page'] as int?) ?? 1,
+      limit: (pagination['limit'] as int?) ?? 20,
+      totalPages: (pagination['totalPages'] as int?) ?? 1,
+      hasNext: (pagination['hasNextPage'] as bool?) ?? false,
+      hasPrev: (pagination['hasPrevPage'] as bool?) ?? false,
+    );
+  }
+  Future<Map<String,dynamic>> addBalance(String userId, double amount, {String? note}) async {
+    final res = await _c.post('/admin/clients/$userId/add-balance', body: {
+      'amount': amount, if (note != null && note.isNotEmpty) 'note': note,
+    });
+    return res['data'] as Map<String,dynamic>;
+  }
+}
+
+// ── Request Chat + Set-Amount ─────────────────────────────
+class AdminMessagesRepo {
+  final _c = AdminApiClient.instance;
+  Future<List<Map<String,dynamic>>> list(String requestId) async {
+    final res = await _c.get('/requests/$requestId/messages');
+    return ((res['data'] as List<dynamic>?) ?? []).cast<Map<String,dynamic>>();
+  }
+  Future<Map<String,dynamic>> send(String requestId, String body) async {
+    final res = await _c.post('/admin/requests/$requestId/messages', body: {'body': body});
+    return res['data'] as Map<String,dynamic>;
+  }
+}
+
+extension AdminRequestsRepoSetAmount on AdminRequestsRepo {
+  Future<Map<String,dynamic>> setAmount(String requestId, double amount) async {
+    final c = AdminApiClient.instance;
+    final res = await c.put('/admin/requests/$requestId/set-amount', body: {'amount': amount});
+    return (res['data'] as Map<String,dynamic>?) ?? {};
+  }
+}
+
 class AdminB2BRepo {
   final _c = AdminApiClient.instance;
   Future<PagedData<B2BAccount>> getApplications({int page=1})async{final res=await _c.get('/b2b/admin/applications',params:{'page':page,'status':'PENDING_APPROVAL'});return PagedData.fromJson(res,B2BAccount.fromJson);}

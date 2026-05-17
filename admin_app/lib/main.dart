@@ -8,10 +8,12 @@ import 'package:percent_indicator/percent_indicator.dart';
 import 'package:badges/badges.dart' as badges;
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'admin_core.dart';
 import 'admin_api.dart';
 import 'admin_notification_service.dart';
 import 'admin_blocs.dart';
+import 'admin_phase2_screens.dart';
 
 // ════════════════════════════════════════════════════════
 //  MAIN
@@ -59,6 +61,10 @@ class _AdminAppState extends State<AdminApp> {
         GoRoute(path:AdminRoutes.notifs,   builder:(_,__)=>const AdminShell(child:AdminNotifsScreen())),
         GoRoute(path:AdminRoutes.settings, builder:(_,__)=>const AdminShell(child:SettingsScreen())),
         GoRoute(path:AdminRoutes.reports,  builder:(_,__)=>const AdminShell(child:ReportsScreen())),
+        GoRoute(path:AdminRoutes.paymentNumbers, builder:(_,__)=>const AdminShell(child:PaymentNumbersScreen())),
+        GoRoute(path:AdminRoutes.clients,        builder:(_,__)=>const AdminShell(child:ClientSearchScreen())),
+        GoRoute(path:AdminRoutes.appSettings,    builder:(_,__)=>const AdminShell(child:AdminSettingsScreen())),
+        GoRoute(path:'/requests/:id/chat',       builder:(_,s)=>AdminShell(child:RequestChatScreen(requestId:s.pathParameters['id']!))),
       ]);
   }
   @override void dispose(){_auth.close();_notifier.dispose();super.dispose();}
@@ -284,6 +290,9 @@ class AdminDrawer extends StatelessWidget {
       _DItem(Icons.people_rounded,'المستخدمون',AdminRoutes.users),
       _DItem(Icons.notifications_rounded,'الإشعارات',AdminRoutes.notifs),
       _DItem(Icons.assessment_rounded,'التقارير',AdminRoutes.reports),
+      _DItem(Icons.payments_rounded,'أرقام الدفع',AdminRoutes.paymentNumbers),
+      _DItem(Icons.search_rounded,'بحث العملاء',AdminRoutes.clients),
+      _DItem(Icons.tune_rounded,'إعدادات التطبيق',AdminRoutes.appSettings),
       const Divider(),
       _DItem(Icons.settings_rounded,'الإعدادات',AdminRoutes.settings),
       ListTile(leading:const Icon(Icons.logout_rounded,color:AC.error),title:Text('تسجيل الخروج',style:AT.body.copyWith(color:AC.error)),onTap:()=>ctx.read<AdminAuthBloc>().add(AdminLogoutEvent())),
@@ -380,9 +389,34 @@ class _ReqDetailState extends State<RequestDetailScreen> {
     }
   }
 
+  Future<void> _showSetAmount(BuildContext ctx) async {
+    final amt = TextEditingController(text: _req!.amount.toStringAsFixed(2));
+    await showDialog(context: ctx, builder: (_) => AlertDialog(
+      title: const Text('تحديد مبلغ الفاتورة'),
+      content: TextField(controller: amt, keyboardType: const TextInputType.numberWithOptions(decimal: true), textDirection: TextDirection.ltr,
+        decoration: const InputDecoration(labelText: 'المبلغ (ج.م)', border: OutlineInputBorder())),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+        TextButton(onPressed: () async {
+          final v = double.tryParse(amt.text.trim());
+          if (v == null || v <= 0) { _showErr(ctx, 'أدخل مبلغاً صحيحاً'); return; }
+          Navigator.pop(ctx);
+          try {
+            final r = await AdminRequestsRepo().setAmount(widget.id, v);
+            if (mounted) _showOk(ctx, r['autoDeducted'] == true ? 'تم خصم المبلغ تلقائياً' : 'بانتظار سداد العميل');
+            _load();
+          } catch (e) { if (mounted) _showErr(ctx, '$e'); }
+        }, child: const Text('تأكيد')),
+      ],
+    )).then((_) => amt.dispose());
+  }
+
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
     appBar:AppBar(title:Text('طلب #${widget.id.substring(0,8)}'),backgroundColor:AC.primary,leading:IconButton(icon:const Icon(Icons.arrow_back_ios_new_rounded),onPressed:()=>ctx.pop()),
-      actions:[IconButton(icon:const Icon(Icons.refresh_rounded),onPressed:_load)]),
+      actions:[
+        IconButton(icon: const Icon(Icons.chat_bubble_outline_rounded), tooltip: 'محادثة العميل', onPressed: () => ctx.push('/requests/${widget.id}/chat')),
+        IconButton(icon:const Icon(Icons.refresh_rounded),onPressed:_load),
+      ]),
     body:_loading?const Center(child:CircularProgressIndicator(color:AC.primary)):_req==null?const Center(child:Text('حدث خطأ')):
     BlocListener<ReqBloc,ReqState>(
       listener:(ctx,s){if(s is ReqError)_showErr(ctx,s.msg);else if(s is! ReqLoading&&s is! ReqProcessing){_showOk(ctx,'تم');_load();}},
@@ -394,8 +428,21 @@ class _ReqDetailState extends State<RequestDetailScreen> {
           _Row('المبلغ','${_req!.amount.toStringAsFixed(2)} ج.م'),
           _Row('الرسوم','${_req!.fee.toStringAsFixed(2)} ج.م'),
           _Row('الإجمالي','${_req!.totalAmount.toStringAsFixed(2)} ج.م'),
-          if(_req!.target.isNotEmpty)_Row('الحساب',_req!.target),
-          _Row('المستخدم','${_req!.userPhone} — ${_req!.userName}'),
+          // Copyable fields — phone, account, billing, bank
+          if (_req!.userPhone.isNotEmpty) CopyField(label: 'هاتف العميل', value: _req!.userPhone, direction: TextDirection.ltr),
+          if (_req!.accountNumber != null && _req!.accountNumber!.isNotEmpty)
+            CopyField(label: 'رقم الحساب', value: _req!.accountNumber!, direction: TextDirection.ltr),
+          if (_req!.phoneNumber != null && _req!.phoneNumber!.isNotEmpty)
+            CopyField(label: 'رقم الهاتف', value: _req!.phoneNumber!, direction: TextDirection.ltr),
+          if (_req!.billingNumber != null && _req!.billingNumber!.isNotEmpty)
+            CopyField(label: 'رقم الفاتورة', value: _req!.billingNumber!, direction: TextDirection.ltr),
+          if (_req!.bankAccount != null && _req!.bankAccount!.isNotEmpty)
+            CopyField(label: 'رقم الحساب البنكي', value: _req!.bankAccount!, direction: TextDirection.ltr),
+          if (_req!.bankName != null && _req!.bankName!.isNotEmpty) _Row('البنك', _req!.bankName!),
+          if (_req!.receiverName != null && _req!.receiverName!.isNotEmpty) _Row('المستلم', _req!.receiverName!),
+          if (_req!.instapayId != null && _req!.instapayId!.isNotEmpty)
+            CopyField(label: 'InstaPay ID', value: _req!.instapayId!, direction: TextDirection.ltr),
+          _Row('المستخدم', _req!.userName),
           _Row('المزود',_req!.providerName),
           _Row('تاريخ الطلب','${_req!.createdAt.day}/${_req!.createdAt.month}/${_req!.createdAt.year} ${_req!.createdAt.hour}:${_req!.createdAt.minute.toString().padLeft(2,'0')}'),
           if(_req!.slaDeadline!=null)_Row('SLA','${_req!.slaDeadline!.hour}:${_req!.slaDeadline!.minute.toString().padLeft(2,'0')}',valueColor:_req!.slaBreached?AC.error:AC.success),
@@ -416,6 +463,21 @@ class _ReqDetailState extends State<RequestDetailScreen> {
           Text('اضغط على الصورة للتكبير', style: AT.cap.copyWith(color: AC.textMuted)),
         ])),
         if(_req!.proofImageUrl != null) const SizedBox(height:AD.md),
+
+        // Set-amount card (BILL_PAYMENT only, pending, no amount yet)
+        if(_req!.isPending && _req!.type == 'BILL_PAYMENT' && _req!.amount == 0) ACard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [const Icon(Icons.attach_money_rounded, color: AC.warning), const SizedBox(width: 8), Text('تحديد مبلغ الفاتورة', style: AT.h3.copyWith(color: AC.warning))]),
+          const SizedBox(height: AD.sm),
+          Text('بعد البحث عن قيمة الفاتورة، حدد المبلغ وسيتم خصمه تلقائياً إن كان رصيد العميل كافياً، وإلا سيُطلب منه السداد ورفع إثبات.', style: AT.cap),
+          const SizedBox(height: AD.md),
+          SizedBox(width: double.infinity, height: AD.btnH, child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: AC.warning),
+            icon: const Icon(Icons.attach_money_rounded),
+            label: const Text('تحديد المبلغ', style: AT.btn),
+            onPressed: () => _showSetAmount(ctx),
+          )),
+        ])),
+        if(_req!.isPending && _req!.type == 'BILL_PAYMENT' && _req!.amount == 0) const SizedBox(height: AD.sm),
 
         // Actions (only if pending) — approve + reject only
         if(_req!.isPending)...[
@@ -846,7 +908,19 @@ class _ReportsState extends State<ReportsScreen> with SingleTickerProviderStateM
     backgroundColor: AC.bg,
     bottomNavigationBar: const AdminBottomNav(current: 'reports'),
     appBar: AppBar(title: const Text('التقارير'), backgroundColor: AC.primary,
-      actions: [IconButton(icon: const Icon(Icons.date_range_rounded), onPressed: _pickRange)],
+      actions: [
+        IconButton(icon: const Icon(Icons.file_download_outlined), tooltip: 'تصدير CSV لليوم', onPressed: () async {
+          try {
+            final token = await AdminApiClient.instance.getToken();
+            final today = DateTime.now().toIso8601String().substring(0, 10);
+            final url = '${AdminConstants.baseUrl}/admin/dashboard/export-csv?date=$today';
+            if (!await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) {
+              if (mounted) _showErr(ctx, 'فشل فتح الرابط: $url\nالتوكن: ${token?.substring(0,8) ?? "?"}...');
+            }
+          } catch (e) { if (mounted) _showErr(ctx, '$e'); }
+        }),
+        IconButton(icon: const Icon(Icons.date_range_rounded), onPressed: _pickRange),
+      ],
       bottom: TabBar(controller: _tab, tabs: const [Tab(text: 'المعاملات'), Tab(text: 'الدفع الآجل')]),
     ),
     drawer: const AdminDrawer(),

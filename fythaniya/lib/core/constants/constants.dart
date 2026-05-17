@@ -36,6 +36,10 @@ class AppRoutes {
   static const String b2bRequest = '/b2b/request';
   static const String b2bInvoices= '/b2b/invoices';
   static const String payLater   = '/pay-later';
+  static const String instapay   = '/instapay';
+  static const String bankTransfer = '/bank-transfer';
+  static const String smartBilling = '/smart-billing';
+  static const String requestChat  = '/requests/chat';
 }
 
 class S {

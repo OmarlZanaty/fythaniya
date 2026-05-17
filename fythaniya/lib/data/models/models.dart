@@ -363,3 +363,26 @@ class PagedResult<T> {
     return PagedResult(data:list.map((e)=>fromItem(e as Map<String,dynamic>)).toList(), total:p['total'] as int, page:p['page'] as int, limit:p['limit'] as int, totalPages:p['totalPages'] as int, hasNext:p['hasNextPage'] as bool, hasPrev:p['hasPrevPage'] as bool);
   }
 }
+
+// Admin-managed tile shown on the home grid. `iconKey`/`colorHex` get resolved
+// to Material Icons / Color at render time (see kHomeIconMap / hex parser).
+class HomeTileModel {
+  final String id, label, route, iconKey, colorHex;
+  final String? category, badge;
+  final int order;
+  final bool requiresPayLater;
+  const HomeTileModel({required this.id, required this.label, required this.route,
+    required this.iconKey, required this.colorHex, this.category, this.badge,
+    required this.order, required this.requiresPayLater});
+  factory HomeTileModel.fromJson(Map<String,dynamic> j) => HomeTileModel(
+    id: j['id'] as String,
+    label: (j['label'] ?? '') as String,
+    route: (j['route'] ?? '') as String,
+    iconKey: (j['iconKey'] ?? 'apps') as String,
+    colorHex: (j['colorHex'] ?? '#3B82F6') as String,
+    category: j['category'] as String?,
+    badge:    j['badge'] as String?,
+    order: (j['order'] as num?)?.toInt() ?? 0,
+    requiresPayLater: (j['requiresPayLater'] as bool?) ?? false,
+  );
+}

@@ -191,6 +191,7 @@ class AdminRoutes {
   static const String paymentNumbers = '/payment-numbers';
   static const String clients    = '/clients';
   static const String appSettings= '/app-settings';
+  static const String homeTiles  = '/home-tiles';
 }
 
 // ═══════════════════════════════════════════════════════════

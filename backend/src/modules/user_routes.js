@@ -2,7 +2,7 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
 const prisma = require('../config/database');
-const { apiResponse, paginate, notifyUser, notifyAdmins, emitToAdmins, hashPassword } = require('../utils/all');
+const { apiResponse, paginate, notifyUser, notifyAdmins, emitToAdmins, emitToUser, hashPassword } = require('../utils/all');
 const { authenticateUser, validate } = require('../middleware/index');
 
 // All routes require user auth

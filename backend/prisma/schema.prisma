@@ -394,6 +394,27 @@ model BillReminder {
   @@map("bill_reminders")
 }
 
+// Admin-managed home-screen tiles shown in the user app's services grid.
+// `iconKey` is a string mapped to a Material icon in the client.
+// `route` is a logical action the client knows how to dispatch (e.g. 'recharge', 'instapay',
+// 'bill_elec', 'pay_later', 'wallet'). Unknown routes fall back to a generic alert.
+model HomeTile {
+  id              String   @id @default(uuid())
+  label           String
+  route           String
+  iconKey         String
+  colorHex        String   @default("#3B82F6")
+  category        String?  // for bill_* tiles → 'ELECTRICITY' / 'GAS' / 'WATER' / etc.
+  order           Int      @default(0)
+  isActive        Boolean  @default(true)
+  requiresPayLater Boolean @default(false)
+  badge           String?  // optional small label ('جديد' / 'تخفيض')
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("home_tiles")
+}
+
 model Escalation {
   id          String          @id @default(uuid())
   requestId   String

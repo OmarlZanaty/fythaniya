@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fythaniya/core/theme/app_theme.dart';
 import 'package:fythaniya/core/constants/constants.dart';
+import 'package:fythaniya/core/biometric/biometric_service.dart';
 import 'package:fythaniya/presentation/blocs/blocs.dart';
 import 'package:fythaniya/presentation/widgets/common/widgets.dart';
 
@@ -14,7 +15,35 @@ class ProfileScreen extends StatefulWidget {
   @override State<ProfileScreen> createState() => _ProfileState();
 }
 class _ProfileState extends State<ProfileScreen> {
-  @override void initState(){super.initState();context.read<ProfileBloc>().add(ProfileLoadEvent());}
+  bool _bioEnabled = false; bool _bioAvailable = false; String _bioLabel = 'القياس الحيوي';
+  @override void initState(){
+    super.initState();
+    context.read<ProfileBloc>().add(ProfileLoadEvent());
+    _loadBiometricState();
+  }
+  Future<void> _loadBiometricState() async {
+    final svc = BiometricService.instance;
+    final available = await svc.canUseBiometrics();
+    final enabled   = await svc.isEnabled();
+    final label     = await svc.bestAvailableLabel();
+    if (mounted) setState(() { _bioAvailable = available; _bioEnabled = enabled; _bioLabel = label; });
+  }
+  Future<void> _toggleBiometric(bool v) async {
+    final svc = BiometricService.instance;
+    if (v) {
+      // Verify the user can actually authenticate before turning it on.
+      final ok = await svc.authenticate(reason: 'تأكيد لتفعيل الدخول بـ$_bioLabel');
+      if (!ok) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تفعيل $_bioLabel'), backgroundColor: AppColors.error));
+        return;
+      }
+    }
+    await svc.setEnabled(v);
+    if (mounted) {
+      setState(() => _bioEnabled = v);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(v ? 'تم تفعيل $_bioLabel' : 'تم إيقاف $_bioLabel'), backgroundColor: AppColors.primary));
+    }
+  }
   @override Widget build(BuildContext context) => Scaffold(
     backgroundColor:AppColors.bg,
     appBar:AppBar(title:const Text(S.profileTitle),backgroundColor:AppColors.primary,
@@ -44,6 +73,15 @@ class _ProfileState extends State<ProfileScreen> {
         const _Label('الحساب'),
         _Item(icon:Icons.edit_rounded,label:S.editProfile,onTap:()=>ctx.push(AppRoutes.editProf)),
         _Item(icon:Icons.lock_outline_rounded,label:S.changePass2,onTap:()=>ctx.push(AppRoutes.changePass)),
+        if (_bioAvailable) AppCard(child: SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: const Icon(Icons.fingerprint_rounded, color: AppColors.primary),
+          title: Text('الدخول بـ$_bioLabel', style: TS.bodyM),
+          subtitle: Text(_bioEnabled ? 'مفعل — سيُطلب منك التحقق عند فتح التطبيق' : 'غير مفعل', style: TS.cap),
+          value: _bioEnabled,
+          onChanged: _toggleBiometric,
+          activeColor: AppColors.primary,
+        )),
         _Item(icon:Icons.notifications_outlined,label:S.notifTitle,onTap:()=>ctx.push(AppRoutes.notifs)),
         _Item(icon:Icons.stars_rounded,label:S.rewardsTitle,onTap:()=>ctx.push(AppRoutes.rewards),color:AppColors.accent),
         if(user.isB2B)_Item(icon:Icons.business_rounded,label:S.b2bTitle,onTap:()=>ctx.push(AppRoutes.b2bDash),color:AppColors.b2b),

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:fythaniya/core/constants/constants.dart';
 import 'package:fythaniya/data/models/models.dart';
@@ -30,6 +32,10 @@ class ApiClient {
   final _sec = const FlutterSecureStorage(aOptions: AndroidOptions(encryptedSharedPreferences:true));
   bool _ready = false;
 
+  // Concurrency control: only one refresh-token call in flight at a time.
+  // Parallel 401s will share the same Future and only retry once after refresh resolves.
+  Completer<bool>? _refreshInFlight;
+
   void init() {
     if (_ready) return; _ready = true;
     _dio = Dio(BaseOptions(
@@ -40,18 +46,24 @@ class ApiClient {
     ));
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (opts, handler) async {
-        final tok = await _sec.read(key:AppConstants.tokenKey);
+        final tok = await _safeRead(AppConstants.tokenKey);
         if (tok!=null) opts.headers['Authorization']='Bearer $tok';
         return handler.next(opts);
       },
       onError: (err, handler) async {
-        if (err.response?.statusCode==401) {
+        // Don't try to refresh on the refresh endpoint itself or auth endpoints — avoid infinite loops.
+        final path = err.requestOptions.path;
+        final isAuthPath = path.contains('/auth/refresh-token') || path.contains('/auth/login') || path.contains('/auth/register');
+        if (err.response?.statusCode==401 && !isAuthPath && err.requestOptions.extra['_retried'] != true) {
           final ok = await _tryRefresh();
           if (ok) {
-            final tok = await _sec.read(key:AppConstants.tokenKey);
+            final tok = await _safeRead(AppConstants.tokenKey);
             err.requestOptions.headers['Authorization']='Bearer $tok';
-            try { final r=await _dio.fetch(err.requestOptions); return handler.resolve(r); } catch (e) { debugPrint('[ApiClient] retry-after-refresh failed: $e'); }
+            err.requestOptions.extra['_retried'] = true;
+            try { final r=await _dio.fetch(err.requestOptions); return handler.resolve(r); }
+            catch (e) { debugPrint('[ApiClient] retry-after-refresh failed: $e'); }
           }
+          // Refresh failed → wipe creds so the auth bloc sees Unauthenticated on next check.
           await clearAll();
         }
         return handler.next(err);
@@ -60,16 +72,47 @@ class ApiClient {
     if (kDebugMode) _dio.interceptors.add(LogInterceptor(requestBody:true,responseBody:true,logPrint:(o)=>debugPrint('[API] $o')));
   }
 
-  Future<bool> _tryRefresh() async {
+  // Wrap FlutterSecureStorage reads to handle the Android keystore "AEADBadTagException" /
+  // "unwrap key failed" corruption that happens after uninstall/reinstall or device-key resets.
+  // When detected, we wipe and return null — the user gets re-prompted for login instead of crashing.
+  Future<String?> _safeRead(String key) async {
     try {
-      final ref = await _sec.read(key:AppConstants.refreshKey);
-      if (ref==null) return false;
-      final res = await Dio().post('${AppConstants.baseUrl}/auth/refresh-token', data:{'refreshToken':ref});
+      return await _sec.read(key: key);
+    } on PlatformException catch (e) {
+      debugPrint('[ApiClient] secure-storage read failed ($key): ${e.code} — wiping corrupted store');
+      try { await _sec.deleteAll(); } catch (_) {}
+      return null;
+    } catch (e) {
+      debugPrint('[ApiClient] secure-storage unexpected error ($key): $e');
+      return null;
+    }
+  }
+
+  Future<bool> _tryRefresh() async {
+    // Share a single refresh among concurrent 401s.
+    final existing = _refreshInFlight;
+    if (existing != null) return existing.future;
+    final c = Completer<bool>();
+    _refreshInFlight = c;
+    try {
+      final ref = await _safeRead(AppConstants.refreshKey);
+      if (ref == null) { c.complete(false); return false; }
+      final res = await Dio().post('${AppConstants.baseUrl}/auth/refresh-token',
+        data: {'refreshToken': ref},
+        options: Options(receiveTimeout: const Duration(seconds: 15)),
+      );
       final d = res.data['data'] as Map<String,dynamic>;
       await _sec.write(key:AppConstants.tokenKey, value:d['accessToken'] as String);
       if (d['refreshToken']!=null) await _sec.write(key:AppConstants.refreshKey, value:d['refreshToken'] as String);
+      c.complete(true);
       return true;
-    } catch (e) { debugPrint('[ApiClient] refresh failed: $e'); return false; }
+    } catch (e) {
+      debugPrint('[ApiClient] refresh failed: $e');
+      c.complete(false);
+      return false;
+    } finally {
+      _refreshInFlight = null;
+    }
   }
 
   Future<Map<String,dynamic>> get(String path, {Map<String,dynamic>? params}) async {
@@ -91,11 +134,19 @@ class ApiClient {
     _sec.write(key:AppConstants.tokenKey,value:a),
     _sec.write(key:AppConstants.refreshKey,value:r),
   ]);
-  Future<String?> getToken() => _sec.read(key:AppConstants.tokenKey);
-  Future<void> clearAll() => Future.wait([
-    _sec.delete(key:AppConstants.tokenKey),
-    _sec.delete(key:AppConstants.refreshKey),
-  ]);
+  Future<String?> getToken() => _safeRead(AppConstants.tokenKey);
+  Future<void> clearAll() async {
+    try {
+      await Future.wait([
+        _sec.delete(key: AppConstants.tokenKey),
+        _sec.delete(key: AppConstants.refreshKey),
+      ]);
+    } catch (e) {
+      // If individual deletes fail (corrupt keystore), nuke the entire store.
+      debugPrint('[ApiClient] clearAll partial failure: $e — falling back to deleteAll()');
+      try { await _sec.deleteAll(); } catch (_) {}
+    }
+  }
 }
 
 // ── Auth Repo ──────────────────────────────────────────────
@@ -142,6 +193,17 @@ class AuthRepo {
 
   Future<void> updateDeviceToken(String token) =>
     _c.put('/auth/device-token', body:{'deviceToken':token});
+}
+
+// ── Home Tiles Repo ────────────────────────────────────────
+class HomeTilesRepo {
+  final _c = ApiClient.instance;
+  Future<List<HomeTileModel>> list() async {
+    final res = await _c.get('/home-tiles');
+    return (res['data'] as List<dynamic>)
+      .map((e) => HomeTileModel.fromJson(e as Map<String,dynamic>))
+      .toList();
+  }
 }
 
 // ── Services Repo ──────────────────────────────────────────

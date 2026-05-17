@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fythaniya/core/theme/app_theme.dart';
 import 'package:fythaniya/core/constants/constants.dart';
+import 'package:fythaniya/core/biometric/biometric_service.dart';
 import 'package:fythaniya/presentation/blocs/blocs.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -25,7 +26,22 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override void dispose() { _c.dispose(); super.dispose(); }
   @override Widget build(BuildContext context) => BlocListener<AuthBloc,AuthState>(
     listener: (ctx, state) async {
-      if (state is AuthAuthenticated) { ctx.go(AppRoutes.home); return; }
+      if (state is AuthAuthenticated) {
+        // Biometric gate: if the user has opted in AND the device supports it, require a
+        // successful biometric scan before entering the app. Cancel/fail = sign out.
+        final svc = BiometricService.instance;
+        if (await svc.isEnabled() && await svc.canUseBiometrics()) {
+          final ok = await svc.authenticate();
+          if (!ok) {
+            if (!mounted) return;
+            ctx.read<AuthBloc>().add(AuthLogoutEvent());
+            return;
+          }
+        }
+        if (!mounted) return;
+        ctx.go(AppRoutes.home);
+        return;
+      }
       if (state is AuthUnauthenticated) {
         final p = await SharedPreferences.getInstance();
         if (!mounted) return;

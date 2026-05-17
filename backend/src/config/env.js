@@ -14,11 +14,14 @@ module.exports = Object.freeze({
 
   jwt: {
     secret:           process.env.JWT_SECRET,
-    expiresIn:        process.env.JWT_EXPIRES_IN || '15m',
+    // Access token lifetime bumped from 15m → 2h. With our refresh-token rotation interceptor,
+    // 15m caused frequent 401s on slow networks and during background polls.
+    expiresIn:        process.env.JWT_EXPIRES_IN || '2h',
     refreshSecret:    process.env.JWT_REFRESH_SECRET,
-    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+    // 30d refresh window so users stay logged in for a month.
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
     adminSecret:      process.env.ADMIN_JWT_SECRET,
-    adminExpiresIn:   process.env.ADMIN_JWT_EXPIRES_IN || '8h',
+    adminExpiresIn:   process.env.ADMIN_JWT_EXPIRES_IN || '12h',
   },
 
   firebase: {

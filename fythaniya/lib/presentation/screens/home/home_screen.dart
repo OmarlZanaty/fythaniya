@@ -3,10 +3,45 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fythaniya/core/theme/app_theme.dart';
 import 'package:fythaniya/core/constants/constants.dart';
+import 'package:fythaniya/core/network/api_client.dart';
 import 'package:fythaniya/data/models/models.dart';
 import 'package:fythaniya/presentation/blocs/blocs.dart';
 import 'package:fythaniya/presentation/widgets/common/widgets.dart';
 import 'package:fythaniya/presentation/screens/all_screens.dart';
+
+// ─── Icon + color registry for admin-driven home tiles ────────────────────────
+// `iconKey` strings the admin can pick from. Unknown keys fall back to apps_rounded.
+const Map<String, IconData> kHomeIconMap = {
+  'smartphone':   Icons.smartphone_rounded,
+  'phone':        Icons.phone_rounded,
+  'bolt':         Icons.bolt_rounded,
+  'gas':          Icons.local_fire_department_rounded,
+  'water':        Icons.water_drop_rounded,
+  'wifi':         Icons.wifi_rounded,
+  'instapay':     Icons.bolt_rounded,
+  'bank':         Icons.account_balance_rounded,
+  'business':     Icons.business_rounded,
+  'wallet':       Icons.account_balance_wallet_rounded,
+  'rewards':      Icons.stars_rounded,
+  'notifications':Icons.notifications_rounded,
+  'pay_later':    Icons.payments_rounded,
+  'shield':       Icons.shield_rounded,
+  'gift':         Icons.card_giftcard_rounded,
+  'cart':         Icons.shopping_cart_rounded,
+  'school':       Icons.school_rounded,
+  'medical':      Icons.medical_services_rounded,
+  'sports':       Icons.sports_esports_rounded,
+  'travel':       Icons.flight_rounded,
+  'globe':        Icons.public_rounded,
+  'gov':          Icons.account_balance_rounded,
+  'apps':         Icons.apps_rounded,
+};
+IconData iconFromKey(String k) => kHomeIconMap[k] ?? Icons.apps_rounded;
+Color colorFromHex(String hex) {
+  var h = hex.replaceFirst('#', '').trim();
+  if (h.length == 6) h = 'FF$h';
+  return Color(int.tryParse(h, radix: 16) ?? 0xFF3B82F6);
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -61,7 +96,8 @@ class _HomeContent extends StatelessWidget {
   final HomeLoaded state;
   const _HomeContent({required this.state});
 
-  static final _services = [
+  // Fallback tiles used when the admin hasn't populated /home-tiles yet.
+  static final _fallbackServices = [
     _Svc(S.recharge,   'TELECOM',      Icons.smartphone_rounded,            AppColors.telecom,     'recharge'),
     _Svc('فواتير موبايل','TELECOM',     Icons.phone_rounded,                 AppColors.telecom,     'bill_telecom'),
     _Svc(S.electricity,'ELECTRICITY',  Icons.bolt_rounded,                  AppColors.electricity, 'bill_elec'),
@@ -77,6 +113,12 @@ class _HomeContent extends StatelessWidget {
     _Svc('محفظتي',     'WALLET',       Icons.account_balance_wallet_rounded,AppColors.primary,     'wallet'),
     _Svc('الدفع الآجل','PAY_LATER',    Icons.payments_rounded,              AppColors.accent,      'pay_later'),
   ];
+
+  List<_Svc> _resolve(List<HomeTileModel>? remote) {
+    if (remote == null || remote.isEmpty) return _fallbackServices;
+    return remote.map((t) => _Svc(t.label, t.category ?? t.route.toUpperCase(),
+      iconFromKey(t.iconKey), colorFromHex(t.colorHex), t.route)).toList();
+  }
 
   @override Widget build(BuildContext context) => RefreshIndicator(
     color:AppColors.primary,
@@ -129,45 +171,51 @@ class _HomeContent extends StatelessWidget {
             ])))),
         if(state.user.isB2B)const SizedBox(height:D.md),
 
-        // Services Grid
+        // Services Grid — admin-driven via /home-tiles, falls back to hardcoded list.
         SectionHeader(title:S.services),
         const SizedBox(height:D.md),
-        Padding(padding:const EdgeInsets.symmetric(horizontal:D.md),
-          child:GridView.builder(
-            shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
-            gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:4,crossAxisSpacing:10,mainAxisSpacing:10,childAspectRatio:0.85),
-            itemCount:_services.length,
-            itemBuilder:(_,i){
-              final s=_services[i];
-              final eligible = state.user.payLaterEligible;
-              final gated = (s.route=='vodafone_cash' || s.route=='pay_later') && !eligible;
-              return GestureDetector(onTap:(){
-                final r=s.route;
-                if (r=='vodafone_cash' && !eligible) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('الخدمة غير متاحة لحسابك. يرجى تفعيل الدفع الآجل أولاً.'),
-                    backgroundColor: AppColors.error,
-                  ));
-                  return;
-                }
-                if (r=='vodafone_cash') { context.push(AppRoutes.bill, extra:'TELECOM'); return; }
-                if (r=='pay_later')      { context.push(AppRoutes.payLater); return; }
-                if (r=='instapay')       { context.push(AppRoutes.instapay); return; }
-                if (r=='bank_transfer')  { context.push(AppRoutes.bankTransfer); return; }
-                if(r=='recharge') context.push(AppRoutes.recharge);
-                else if(r=='wallet') context.push(AppRoutes.wallet);
-                else if(r=='rewards') context.push(AppRoutes.rewards);
-                else if(r=='notifs') context.push(AppRoutes.notifs);
-                else if(r=='b2b') context.push(state.user.isB2B?AppRoutes.b2bDash:AppRoutes.b2bApply);
-                // Bills now route to the smart-billing flow (admin sets amount)
-                else if(r.startsWith('bill_')) context.push(AppRoutes.smartBilling, extra:s.cat);
-                else context.push(AppRoutes.bill, extra:s.cat);
-              },child:Opacity(opacity: gated ? 0.4 : 1.0, child: Column(mainAxisSize:MainAxisSize.min,children:[
-                Container(width:56,height:56,decoration:BoxDecoration(color:s.color.withOpacity(0.1),borderRadius:BorderRadius.circular(14),border:Border.all(color:s.color.withOpacity(0.2))),child:Icon(s.icon,color:s.color,size:26)),
-                const SizedBox(height:5),
-                Text(s.label,style:TS.cap.copyWith(fontSize:10),textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis),
-              ])));
-            })),
+        FutureBuilder<List<HomeTileModel>>(
+          future: HomeTilesRepo().list().catchError((_) => <HomeTileModel>[]),
+          builder: (ctx, snap) {
+            final services = _resolve(snap.data);
+            return Padding(padding:const EdgeInsets.symmetric(horizontal:D.md),
+              child:GridView.builder(
+                shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),
+                gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:4,crossAxisSpacing:10,mainAxisSpacing:10,childAspectRatio:0.85),
+                itemCount:services.length,
+                itemBuilder:(_,i){
+                  final s=services[i];
+                  final eligible = state.user.payLaterEligible;
+                  final gated = (s.route=='vodafone_cash' || s.route=='pay_later') && !eligible;
+                  return GestureDetector(onTap:(){
+                    final r=s.route;
+                    if (r=='vodafone_cash' && !eligible) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('الخدمة غير متاحة لحسابك. يرجى تفعيل الدفع الآجل أولاً.'),
+                        backgroundColor: AppColors.error,
+                      ));
+                      return;
+                    }
+                    if (r=='vodafone_cash') { context.push(AppRoutes.bill, extra:'TELECOM'); return; }
+                    if (r=='pay_later')      { context.push(AppRoutes.payLater); return; }
+                    if (r=='instapay')       { context.push(AppRoutes.instapay); return; }
+                    if (r=='bank_transfer')  { context.push(AppRoutes.bankTransfer); return; }
+                    if(r=='recharge') context.push(AppRoutes.recharge);
+                    else if(r=='wallet') context.push(AppRoutes.wallet);
+                    else if(r=='rewards') context.push(AppRoutes.rewards);
+                    else if(r=='notifs') context.push(AppRoutes.notifs);
+                    else if(r=='b2b') context.push(state.user.isB2B?AppRoutes.b2bDash:AppRoutes.b2bApply);
+                    // Bills now route to the smart-billing flow (admin sets amount)
+                    else if(r.startsWith('bill_')) context.push(AppRoutes.smartBilling, extra:s.cat);
+                    else context.push(AppRoutes.bill, extra:s.cat);
+                  },child:Opacity(opacity: gated ? 0.4 : 1.0, child: Column(mainAxisSize:MainAxisSize.min,children:[
+                    Container(width:56,height:56,decoration:BoxDecoration(color:s.color.withOpacity(0.1),borderRadius:BorderRadius.circular(14),border:Border.all(color:s.color.withOpacity(0.2))),child:Icon(s.icon,color:s.color,size:26)),
+                    const SizedBox(height:5),
+                    Text(s.label,style:TS.cap.copyWith(fontSize:10),textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis),
+                  ])));
+                }));
+          },
+        ),
 
         const SizedBox(height:D.lg),
         // Recent

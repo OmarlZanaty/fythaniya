@@ -58,45 +58,20 @@ class _PNState extends State<PaymentNumbersScreen> {
   }
 
   Future<void> _showForm({Map<String,dynamic>? existing}) async {
-    final number = TextEditingController(text: existing?['number']?.toString() ?? '');
-    final label  = TextEditingController(text: existing?['label']?.toString() ?? '');
-    String type  = (existing?['type'] as String?) ?? 'WALLET';
-    await showDialog(context: context, builder: (_) => AlertDialog(
-      title: Text(existing == null ? 'إضافة رقم دفع' : 'تعديل رقم دفع'),
-      content: StatefulBuilder(builder: (ctx, set) => SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        DropdownButtonFormField<String>(
-          value: type,
-          decoration: const InputDecoration(labelText: 'النوع', border: OutlineInputBorder()),
-          items: const [
-            DropdownMenuItem(value: 'WALLET',   child: Text('محفظة (Vodafone/Orange Cash)')),
-            DropdownMenuItem(value: 'INSTAPAY', child: Text('InstaPay')),
-            DropdownMenuItem(value: 'BANK',     child: Text('حساب بنكي')),
-          ],
-          onChanged: (v) => set(() => type = v ?? 'WALLET'),
-        ),
-        const SizedBox(height: 12),
-        TextField(controller: label,  decoration: const InputDecoration(labelText: 'الاسم/الوصف', border: OutlineInputBorder())),
-        const SizedBox(height: 12),
-        TextField(controller: number, keyboardType: TextInputType.phone, textDirection: TextDirection.ltr,
-          decoration: const InputDecoration(labelText: 'الرقم/الحساب', border: OutlineInputBorder())),
-      ]))),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-        TextButton(onPressed: () async {
-          if (label.text.trim().isEmpty || number.text.trim().isEmpty) { _showErr(context, 'الاسم والرقم مطلوبان'); return; }
-          Navigator.pop(context);
-          try {
-            if (existing == null) {
-              await AdminPaymentNumbersRepo().create({'type': type, 'label': label.text.trim(), 'number': number.text.trim()});
-            } else {
-              await AdminPaymentNumbersRepo().update(existing['id'] as String, {'type': type, 'label': label.text.trim(), 'number': number.text.trim()});
-            }
-            _load();
-            if (mounted) _showOk(context, 'تم الحفظ');
-          } catch (e) { if (mounted) _showErr(context, '$e'); }
-        }, child: const Text('حفظ')),
-      ],
-    )).then((_) { number.dispose(); label.dispose(); });
+    final saved = await showDialog<Map<String,String>>(
+      context: context,
+      builder: (_) => _PaymentNumberFormDialog(existing: existing),
+    );
+    if (saved == null) return;
+    try {
+      if (existing == null) {
+        await AdminPaymentNumbersRepo().create(saved);
+      } else {
+        await AdminPaymentNumbersRepo().update(existing['id'] as String, saved);
+      }
+      await _load();
+      if (mounted) _showOk(context, 'تم الحفظ');
+    } catch (e) { if (mounted) _showErr(context, '$e'); }
   }
 
   Future<void> _toggle(Map<String,dynamic> item) async {
@@ -191,30 +166,18 @@ class _CSState extends State<ClientSearchScreen> {
   }
 
   Future<void> _showAddBalance(Map<String,dynamic> u) async {
-    final amount = TextEditingController(); final note = TextEditingController();
-    await showDialog(context: context, builder: (_) => AlertDialog(
-      title: Text('إضافة رصيد — ${u['fullName']}'),
-      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'المبلغ (ج.م)', border: OutlineInputBorder())),
-        const SizedBox(height: 12),
-        TextField(controller: note, maxLines: 2,
-          decoration: const InputDecoration(labelText: 'ملاحظة (اختياري)', border: OutlineInputBorder())),
-      ])),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-        TextButton(onPressed: () async {
-          final amt = double.tryParse(amount.text.trim());
-          if (amt == null || amt <= 0) { _showErr(context, 'أدخل مبلغاً صحيحاً'); return; }
-          Navigator.pop(context);
-          try {
-            await AdminClientsRepo().addBalance(u['id'] as String, amt, note: note.text.trim().isEmpty ? null : note.text.trim());
-            _search(_q.text.trim());
-            if (mounted) _showOk(context, 'تم إضافة $amt ج.م');
-          } catch (e) { if (mounted) _showErr(context, '$e'); }
-        }, child: const Text('إضافة')),
-      ],
-    )).then((_) { amount.dispose(); note.dispose(); });
+    final result = await showDialog<Map<String,dynamic>>(
+      context: context,
+      builder: (_) => _AddBalanceDialog(userName: u['fullName']?.toString() ?? '—'),
+    );
+    if (result == null) return;
+    final amt = result['amount'] as double;
+    final note = result['note'] as String?;
+    try {
+      await AdminClientsRepo().addBalance(u['id'] as String, amt, note: note);
+      await _search(_q.text.trim());
+      if (mounted) _showOk(context, 'تم إضافة $amt ج.م');
+    } catch (e) { if (mounted) _showErr(context, '$e'); }
   }
 
   @override
@@ -248,6 +211,338 @@ class _CSState extends State<ClientSearchScreen> {
             ));
           })),
     ]),
+  );
+}
+
+// ════════════════════════════════════════════════════════
+//  HOME TILES (admin CMS for the user app's icon grid)
+// ════════════════════════════════════════════════════════
+const _kHomeTileIcons = <String, IconData>{
+  'smartphone':    Icons.smartphone_rounded,
+  'phone':         Icons.phone_rounded,
+  'bolt':          Icons.bolt_rounded,
+  'gas':           Icons.local_fire_department_rounded,
+  'water':         Icons.water_drop_rounded,
+  'wifi':          Icons.wifi_rounded,
+  'instapay':      Icons.bolt_rounded,
+  'bank':          Icons.account_balance_rounded,
+  'business':      Icons.business_rounded,
+  'wallet':        Icons.account_balance_wallet_rounded,
+  'rewards':       Icons.stars_rounded,
+  'notifications': Icons.notifications_rounded,
+  'pay_later':     Icons.payments_rounded,
+  'shield':        Icons.shield_rounded,
+  'gift':          Icons.card_giftcard_rounded,
+  'cart':          Icons.shopping_cart_rounded,
+  'school':        Icons.school_rounded,
+  'medical':       Icons.medical_services_rounded,
+  'sports':        Icons.sports_esports_rounded,
+  'travel':        Icons.flight_rounded,
+  'globe':         Icons.public_rounded,
+  'gov':           Icons.account_balance_rounded,
+  'apps':          Icons.apps_rounded,
+};
+const _kHomeTileRoutes = <String, String>{
+  'recharge':       'شحن رصيد',
+  'bill_telecom':   'فاتورة تليفون',
+  'bill_elec':      'كهرباء',
+  'bill_gas':       'غاز',
+  'bill_water':     'مياه',
+  'bill_internet':  'إنترنت',
+  'instapay':       'InstaPay',
+  'bank_transfer':  'تحويل بنكي',
+  'b2b':            'حساب شركات',
+  'vodafone_cash':  'فودافون كاش (Pay-Later)',
+  'pay_later':      'الدفع الآجل',
+  'wallet':         'محفظتي',
+  'rewards':        'مكافآت',
+  'notifs':         'الإشعارات',
+};
+Color _hexToColor(String h) {
+  var s = h.replaceFirst('#', '').trim();
+  if (s.length == 6) s = 'FF$s';
+  return Color(int.tryParse(s, radix: 16) ?? 0xFF3B82F6);
+}
+
+class HomeTilesScreen extends StatefulWidget {
+  const HomeTilesScreen({super.key});
+  @override State<HomeTilesScreen> createState() => _HomeTilesState();
+}
+class _HomeTilesState extends State<HomeTilesScreen> {
+  List<Map<String,dynamic>> _items = [];
+  bool _loading = true;
+
+  @override void initState() { super.initState(); _load(); }
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final items = await AdminHomeTilesRepo().list();
+      if (mounted) setState(() { _items = items; _loading = false; });
+    } catch (e) { if (mounted) { setState(() => _loading = false); _showErr(context, '$e'); } }
+  }
+
+  Future<void> _toggle(Map<String,dynamic> it) async {
+    try {
+      await AdminHomeTilesRepo().update(it['id'] as String, {'isActive': !(it['isActive'] as bool? ?? true)});
+      await _load();
+    } catch (e) { if (mounted) _showErr(context, '$e'); }
+  }
+
+  Future<void> _delete(Map<String,dynamic> it) async {
+    final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+      title: const Text('حذف الأيقونة'),
+      content: Text('سيتم حذف "${it['label']}" نهائياً. متأكد؟'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+        TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('حذف', style: TextStyle(color: AC.error))),
+      ],
+    ));
+    if (ok != true) return;
+    try { await AdminHomeTilesRepo().delete(it['id'] as String); await _load(); }
+    catch (e) { if (mounted) _showErr(context, '$e'); }
+  }
+
+  Future<void> _showForm({Map<String,dynamic>? existing}) async {
+    final saved = await showDialog<Map<String,dynamic>>(
+      context: context,
+      builder: (_) => _HomeTileFormDialog(existing: existing, nextOrder: _items.length),
+    );
+    if (saved == null) return;
+    try {
+      if (existing == null) {
+        await AdminHomeTilesRepo().create(saved);
+      } else {
+        await AdminHomeTilesRepo().update(existing['id'] as String, saved);
+      }
+      await _load();
+      if (mounted) _showOk(context, 'تم الحفظ');
+    } catch (e) { if (mounted) _showErr(context, '$e'); }
+  }
+
+  @override
+  Widget build(BuildContext ctx) => Scaffold(
+    backgroundColor: AC.bg,
+    appBar: AppBar(title: const Text('أيقونات الرئيسية'), backgroundColor: AC.primary, actions: [
+      IconButton(icon: const Icon(Icons.add_rounded), tooltip: 'إضافة', onPressed: () => _showForm()),
+    ]),
+    body: _loading
+      ? const Center(child: CircularProgressIndicator(color: AC.primary))
+      : RefreshIndicator(color: AC.primary, onRefresh: _load, child: _items.isEmpty
+          ? ListView(children: const [SizedBox(height: 120), Center(child: Padding(padding: EdgeInsets.all(24), child: Text('لا توجد أيقونات. اضغط + لإضافة أول أيقونة.\nإذا تركتها فارغة سيظهر للعملاء قائمة افتراضية.', textAlign: TextAlign.center)))])
+          : ReorderableListView.builder(
+              padding: const EdgeInsets.all(AD.md),
+              itemCount: _items.length,
+              onReorder: (oldI, newI) async {
+                if (newI > oldI) newI -= 1;
+                setState(() {
+                  final it = _items.removeAt(oldI);
+                  _items.insert(newI, it);
+                });
+                try {
+                  final payload = <Map<String,dynamic>>[];
+                  for (var i = 0; i < _items.length; i++) {
+                    payload.add({'id': _items[i]['id'], 'order': i});
+                  }
+                  await AdminHomeTilesRepo().reorder(payload);
+                } catch (e) { if (mounted) _showErr(context, '$e'); }
+              },
+              itemBuilder: (_, i) {
+                final it = _items[i];
+                final iconKey  = (it['iconKey']  as String?) ?? 'apps';
+                final colorHex = (it['colorHex'] as String?) ?? '#3B82F6';
+                final color    = _hexToColor(colorHex);
+                final active   = (it['isActive'] as bool?) ?? true;
+                return Card(key: ValueKey(it['id']), margin: const EdgeInsets.only(bottom: 10),
+                  child: ListTile(
+                    leading: CircleAvatar(backgroundColor: color.withOpacity(0.12),
+                      child: Icon(_kHomeTileIcons[iconKey] ?? Icons.apps_rounded, color: color)),
+                    title: Text(it['label']?.toString() ?? '—', style: AT.bodyM),
+                    subtitle: Text('${_kHomeTileRoutes[it['route']] ?? it['route']} • ترتيب ${it['order'] ?? 0}', style: AT.cap),
+                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Switch.adaptive(value: active, onChanged: (_) => _toggle(it), activeColor: AC.success),
+                      IconButton(icon: const Icon(Icons.edit_rounded, size: 18, color: AC.primary), onPressed: () => _showForm(existing: it)),
+                      IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AC.error), onPressed: () => _delete(it)),
+                    ]),
+                  ),
+                );
+              },
+            )),
+  );
+}
+
+class _HomeTileFormDialog extends StatefulWidget {
+  final Map<String,dynamic>? existing;
+  final int nextOrder;
+  const _HomeTileFormDialog({this.existing, required this.nextOrder});
+  @override State<_HomeTileFormDialog> createState() => _HomeTileFormDialogState();
+}
+class _HomeTileFormDialogState extends State<_HomeTileFormDialog> {
+  late final TextEditingController _label;
+  late final TextEditingController _color;
+  late final TextEditingController _category;
+  late final TextEditingController _badge;
+  late String _route;
+  late String _iconKey;
+  late int    _order;
+  bool _requiresPayLater = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    _label    = TextEditingController(text: e?['label']?.toString() ?? '');
+    _color    = TextEditingController(text: e?['colorHex']?.toString() ?? '#3B82F6');
+    _category = TextEditingController(text: e?['category']?.toString() ?? '');
+    _badge    = TextEditingController(text: e?['badge']?.toString() ?? '');
+    _route    = (e?['route'] as String?) ?? 'recharge';
+    _iconKey  = (e?['iconKey'] as String?) ?? 'apps';
+    _order    = (e?['order'] as int?) ?? widget.nextOrder;
+    _requiresPayLater = (e?['requiresPayLater'] as bool?) ?? false;
+  }
+  @override void dispose() { _label.dispose(); _color.dispose(); _category.dispose(); _badge.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext ctx) => AlertDialog(
+    title: Text(widget.existing == null ? 'إضافة أيقونة' : 'تعديل أيقونة'),
+    content: SizedBox(width: 360, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      TextField(controller: _label, decoration: const InputDecoration(labelText: 'الاسم الظاهر', border: OutlineInputBorder())),
+      const SizedBox(height: 12),
+      DropdownButtonFormField<String>(
+        value: _route,
+        decoration: const InputDecoration(labelText: 'الإجراء', border: OutlineInputBorder()),
+        items: _kHomeTileRoutes.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+        onChanged: (v) => setState(() => _route = v ?? 'recharge'),
+      ),
+      const SizedBox(height: 12),
+      DropdownButtonFormField<String>(
+        value: _iconKey,
+        decoration: const InputDecoration(labelText: 'الأيقونة', border: OutlineInputBorder()),
+        items: _kHomeTileIcons.entries.map((e) => DropdownMenuItem(value: e.key,
+          child: Row(children: [Icon(e.value, size: 18, color: AC.primary), const SizedBox(width: 8), Text(e.key)]))).toList(),
+        onChanged: (v) => setState(() => _iconKey = v ?? 'apps'),
+      ),
+      const SizedBox(height: 12),
+      TextField(controller: _color, textDirection: TextDirection.ltr,
+        decoration: const InputDecoration(labelText: 'اللون (HEX) — مثال #3B82F6', border: OutlineInputBorder())),
+      const SizedBox(height: 12),
+      TextField(controller: _category, textDirection: TextDirection.ltr,
+        decoration: const InputDecoration(labelText: 'التصنيف (اختياري) — مثل ELECTRICITY', border: OutlineInputBorder())),
+      const SizedBox(height: 12),
+      TextField(controller: _badge,
+        decoration: const InputDecoration(labelText: 'شارة (اختياري) — مثل "جديد"', border: OutlineInputBorder())),
+      const SizedBox(height: 12),
+      Row(children: [
+        Expanded(child: Text('الترتيب: $_order', style: AT.cap)),
+        IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () => setState(() => _order = (_order - 1).clamp(0, 9999))),
+        IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () => setState(() => _order = (_order + 1).clamp(0, 9999))),
+      ]),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('يتطلب الدفع الآجل'),
+        subtitle: const Text('سيظهر للعميل معطّلاً حتى يتم تفعيل الدفع الآجل'),
+        value: _requiresPayLater,
+        onChanged: (v) => setState(() => _requiresPayLater = v),
+      ),
+    ]))),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+      TextButton(onPressed: () {
+        if (_label.text.trim().isEmpty) { _showErr(ctx, 'الاسم مطلوب'); return; }
+        final color = _color.text.trim();
+        if (!RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(color)) { _showErr(ctx, 'صيغة اللون غير صحيحة'); return; }
+        Navigator.pop(ctx, <String,dynamic>{
+          'label': _label.text.trim(),
+          'route': _route,
+          'iconKey': _iconKey,
+          'colorHex': color,
+          'category': _category.text.trim().isEmpty ? null : _category.text.trim().toUpperCase(),
+          'badge': _badge.text.trim().isEmpty ? null : _badge.text.trim(),
+          'order': _order,
+          'requiresPayLater': _requiresPayLater,
+        });
+      }, child: const Text('حفظ')),
+    ],
+  );
+}
+
+// ════════════════════════════════════════════════════════
+//  STATEFUL DIALOG WIDGETS (own their controllers → safe dispose)
+// ════════════════════════════════════════════════════════
+class _AddBalanceDialog extends StatefulWidget {
+  final String userName;
+  const _AddBalanceDialog({required this.userName});
+  @override State<_AddBalanceDialog> createState() => _AddBalanceDialogState();
+}
+class _AddBalanceDialogState extends State<_AddBalanceDialog> {
+  final _amount = TextEditingController();
+  final _note   = TextEditingController();
+  @override void dispose() { _amount.dispose(); _note.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext ctx) => AlertDialog(
+    title: Text('إضافة رصيد — ${widget.userName}'),
+    content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      TextField(controller: _amount, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(labelText: 'المبلغ (ج.م)', border: OutlineInputBorder())),
+      const SizedBox(height: 12),
+      TextField(controller: _note, maxLines: 2,
+        decoration: const InputDecoration(labelText: 'ملاحظة (اختياري)', border: OutlineInputBorder())),
+    ])),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+      TextButton(onPressed: () {
+        final amt = double.tryParse(_amount.text.trim());
+        if (amt == null || amt <= 0) { _showErr(ctx, 'أدخل مبلغاً صحيحاً'); return; }
+        final n = _note.text.trim();
+        Navigator.pop(ctx, {'amount': amt, 'note': n.isEmpty ? null : n});
+      }, child: const Text('إضافة')),
+    ],
+  );
+}
+
+class _PaymentNumberFormDialog extends StatefulWidget {
+  final Map<String,dynamic>? existing;
+  const _PaymentNumberFormDialog({this.existing});
+  @override State<_PaymentNumberFormDialog> createState() => _PaymentNumberFormDialogState();
+}
+class _PaymentNumberFormDialogState extends State<_PaymentNumberFormDialog> {
+  late final TextEditingController _number;
+  late final TextEditingController _label;
+  late String _type;
+  @override
+  void initState() {
+    super.initState();
+    _number = TextEditingController(text: widget.existing?['number']?.toString() ?? '');
+    _label  = TextEditingController(text: widget.existing?['label']?.toString() ?? '');
+    _type   = (widget.existing?['type'] as String?) ?? 'WALLET';
+  }
+  @override void dispose() { _number.dispose(); _label.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext ctx) => AlertDialog(
+    title: Text(widget.existing == null ? 'إضافة رقم دفع' : 'تعديل رقم دفع'),
+    content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      DropdownButtonFormField<String>(
+        value: _type,
+        decoration: const InputDecoration(labelText: 'النوع', border: OutlineInputBorder()),
+        items: const [
+          DropdownMenuItem(value: 'WALLET',   child: Text('محفظة (Vodafone/Orange Cash)')),
+          DropdownMenuItem(value: 'INSTAPAY', child: Text('InstaPay')),
+          DropdownMenuItem(value: 'BANK',     child: Text('حساب بنكي')),
+        ],
+        onChanged: (v) => setState(() => _type = v ?? 'WALLET'),
+      ),
+      const SizedBox(height: 12),
+      TextField(controller: _label,  decoration: const InputDecoration(labelText: 'الاسم/الوصف', border: OutlineInputBorder())),
+      const SizedBox(height: 12),
+      TextField(controller: _number, keyboardType: TextInputType.phone, textDirection: TextDirection.ltr,
+        decoration: const InputDecoration(labelText: 'الرقم/الحساب', border: OutlineInputBorder())),
+    ])),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+      TextButton(onPressed: () {
+        if (_label.text.trim().isEmpty || _number.text.trim().isEmpty) { _showErr(ctx, 'الاسم والرقم مطلوبان'); return; }
+        Navigator.pop(ctx, <String,String>{'type': _type, 'label': _label.text.trim(), 'number': _number.text.trim()});
+      }, child: const Text('حفظ')),
+    ],
   );
 }
 

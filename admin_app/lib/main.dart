@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'admin_core.dart';
 import 'admin_api.dart';
 import 'admin_notification_service.dart';
+import 'admin_biometric_service.dart';
 import 'admin_blocs.dart';
 import 'admin_phase2_screens.dart';
 
@@ -64,6 +65,7 @@ class _AdminAppState extends State<AdminApp> {
         GoRoute(path:AdminRoutes.paymentNumbers, builder:(_,__)=>const AdminShell(child:PaymentNumbersScreen())),
         GoRoute(path:AdminRoutes.clients,        builder:(_,__)=>const AdminShell(child:ClientSearchScreen())),
         GoRoute(path:AdminRoutes.appSettings,    builder:(_,__)=>const AdminShell(child:AdminSettingsScreen())),
+        GoRoute(path:AdminRoutes.homeTiles,      builder:(_,__)=>const AdminShell(child:HomeTilesScreen())),
         GoRoute(path:'/requests/:id/chat',       builder:(_,s)=>AdminShell(child:RequestChatScreen(requestId:s.pathParameters['id']!))),
       ]);
   }
@@ -187,7 +189,25 @@ class _LoginState extends State<LoginScreen> {
     Text('لوحة الإدارة',style:AT.cap.copyWith(color:Colors.white.withOpacity(0.85))),
     const SizedBox(height:48),
     Expanded(child:Container(decoration:const BoxDecoration(color:AC.bg,borderRadius:BorderRadius.vertical(top:Radius.circular(28))),child:BlocConsumer<AdminAuthBloc,AdminAuthState>(
-      listener:(ctx,s){if(s is AdminAuthLoggedIn){AdminSocketService.instance.connect();ctx.go(AdminRoutes.dashboard);}if(s is AdminAuthError)_showErr(ctx,s.msg);},
+      listener:(ctx,s) async {
+        if (s is AdminAuthLoggedIn) {
+          // Biometric gate: if the admin opted in AND the device supports it, require a
+          // successful scan before entering the dashboard. Failure = sign out.
+          final svc = AdminBiometricService.instance;
+          if (await svc.isEnabled() && await svc.canUseBiometrics()) {
+            final ok = await svc.authenticate();
+            if (!ok) {
+              if (!ctx.mounted) return;
+              ctx.read<AdminAuthBloc>().add(AdminLogoutEvent());
+              return;
+            }
+          }
+          if (!ctx.mounted) return;
+          AdminSocketService.instance.connect();
+          ctx.go(AdminRoutes.dashboard);
+        }
+        if (s is AdminAuthError) _showErr(ctx, s.msg);
+      },
       builder:(ctx,s)=>SingleChildScrollView(padding:const EdgeInsets.all(AD.xl),child:Form(key:_form,child:Column(children:[
         const SizedBox(height:AD.lg),Text('تسجيل الدخول',style:AT.h2),const SizedBox(height:AD.xl),
         TextFormField(controller:_email,keyboardType:TextInputType.emailAddress,textDirection:TextDirection.ltr,validator:(v)=>(v?.isEmpty??true)?'البريد مطلوب':null,decoration:const InputDecoration(labelText:'البريد الإلكتروني',prefixIcon:Icon(Icons.email_outlined))),
@@ -292,6 +312,7 @@ class AdminDrawer extends StatelessWidget {
       _DItem(Icons.assessment_rounded,'التقارير',AdminRoutes.reports),
       _DItem(Icons.payments_rounded,'أرقام الدفع',AdminRoutes.paymentNumbers),
       _DItem(Icons.search_rounded,'بحث العملاء',AdminRoutes.clients),
+      _DItem(Icons.apps_rounded,'أيقونات الرئيسية',AdminRoutes.homeTiles),
       _DItem(Icons.tune_rounded,'إعدادات التطبيق',AdminRoutes.appSettings),
       const Divider(),
       _DItem(Icons.settings_rounded,'الإعدادات',AdminRoutes.settings),
@@ -390,25 +411,16 @@ class _ReqDetailState extends State<RequestDetailScreen> {
   }
 
   Future<void> _showSetAmount(BuildContext ctx) async {
-    final amt = TextEditingController(text: _req!.amount.toStringAsFixed(2));
-    await showDialog(context: ctx, builder: (_) => AlertDialog(
-      title: const Text('تحديد مبلغ الفاتورة'),
-      content: TextField(controller: amt, keyboardType: const TextInputType.numberWithOptions(decimal: true), textDirection: TextDirection.ltr,
-        decoration: const InputDecoration(labelText: 'المبلغ (ج.م)', border: OutlineInputBorder())),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-        TextButton(onPressed: () async {
-          final v = double.tryParse(amt.text.trim());
-          if (v == null || v <= 0) { _showErr(ctx, 'أدخل مبلغاً صحيحاً'); return; }
-          Navigator.pop(ctx);
-          try {
-            final r = await AdminRequestsRepo().setAmount(widget.id, v);
-            if (mounted) _showOk(ctx, r['autoDeducted'] == true ? 'تم خصم المبلغ تلقائياً' : 'بانتظار سداد العميل');
-            _load();
-          } catch (e) { if (mounted) _showErr(ctx, '$e'); }
-        }, child: const Text('تأكيد')),
-      ],
-    )).then((_) => amt.dispose());
+    final v = await showDialog<double>(
+      context: ctx,
+      builder: (_) => _SetAmountDialog(initial: _req!.amount.toStringAsFixed(2)),
+    );
+    if (v == null) return;
+    try {
+      final r = await AdminRequestsRepo().setAmount(widget.id, v);
+      if (mounted) _showOk(ctx, r['autoDeducted'] == true ? 'تم خصم المبلغ تلقائياً' : 'بانتظار سداد العميل');
+      await _load();
+    } catch (e) { if (mounted) _showErr(ctx, '$e'); }
   }
 
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
@@ -656,6 +668,16 @@ class _ServicesState extends State<ServicesScreen> {
                   icon: const Icon(Icons.add_a_photo_rounded, color: AC.primary, size: 20),
                   onPressed: () => _pickProviderLogo(ctx, p.id),
                 ),
+                IconButton(
+                  tooltip: 'تعديل المزود',
+                  icon: const Icon(Icons.edit_rounded, color: AC.primary, size: 20),
+                  onPressed: () => _showEditProvider(ctx, p),
+                ),
+                IconButton(
+                  tooltip: 'حذف المزود',
+                  icon: const Icon(Icons.delete_outline_rounded, color: AC.error, size: 20),
+                  onPressed: () => _confirmDeleteProvider(ctx, p),
+                ),
                 Switch.adaptive(value:p.isActive,onChanged:(v)=>ctx.read<AdminServicesBloc>().add(AdminServicesToggleProviderEvent(p.id,v)),activeColor:AC.success),
               ]),
               subtitle:Text('${p.category} — ${p.subServices.length} خدمات',style:AT.cap),
@@ -671,8 +693,14 @@ class _ServicesState extends State<ServicesScreen> {
                       onPressed: () => _pickSubServiceImage(ctx, sub.id),
                     ),
                     IconButton(
+                      tooltip: 'تعديل الخدمة',
                       icon: const Icon(Icons.edit_rounded, color: AC.primary, size: 18),
                       onPressed: () => _showEditSub(ctx, sub),
+                    ),
+                    IconButton(
+                      tooltip: 'حذف الخدمة',
+                      icon: const Icon(Icons.delete_outline_rounded, color: AC.error, size: 18),
+                      onPressed: () => _confirmDeleteSub(ctx, sub),
                     ),
                   ]),
                 )),
@@ -698,9 +726,20 @@ class _ServicesState extends State<ServicesScreen> {
     },child:const Text('إضافة'))])).then((_){_name.dispose();_display.dispose();});
   }
 
-  void _showEditSub(BuildContext ctx,SubService sub){
-    final _fixed=TextEditingController(text:sub.fixedFee.toString()); final _pct=TextEditingController(text:(sub.percentageFee*100).toString());
-    showDialog(context:ctx,builder:(_)=>AlertDialog(title:Text('تعديل ${sub.nameAr}'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:_fixed,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الرسوم الثابتة (ج.م)')),TextField(controller:_pct,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'النسبة المئوية (%)'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){Navigator.pop(ctx);final fixed=double.tryParse(_fixed.text)??sub.fixedFee;final pct=(double.tryParse(_pct.text)??sub.percentageFee*100)/100;ctx.read<AdminServicesBloc>().add(AdminServicesUpdateFeeEvent(sub.id,fixed,pct));},child:const Text('حفظ'))])).then((_){_fixed.dispose();_pct.dispose();});
+  Future<void> _showEditSub(BuildContext ctx, SubService sub) async {
+    final result = await showDialog<Map<String,dynamic>>(
+      context: ctx,
+      builder: (_) => _EditSubServiceDialog(sub: sub),
+    );
+    if (result == null) return;
+    try {
+      await AdminServicesRepo().updateSubService(sub.id, result);
+      if (!ctx.mounted) return;
+      _showOk(ctx, '✅ تم التعديل');
+      ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+    } on AdminApiException catch (e) {
+      if (ctx.mounted) _showErr(ctx, e.message);
+    }
   }
 
   void _showAddSub(BuildContext ctx,String providerId){
@@ -752,6 +791,161 @@ class _ServicesState extends State<ServicesScreen> {
     final file = await picker.pickImage(source: source, imageQuality: 80, maxWidth: 1200);
     return file?.path;
   }
+
+  // Edit a provider's displayName + category. Uses a stateful dialog to safely own controllers.
+  Future<void> _showEditProvider(BuildContext ctx, ServiceProvider p) async {
+    final result = await showDialog<Map<String,dynamic>>(
+      context: ctx,
+      builder: (_) => _EditProviderDialog(provider: p),
+    );
+    if (result == null) return;
+    try {
+      await AdminServicesRepo().updateProvider(p.id, result);
+      if (!ctx.mounted) return;
+      _showOk(ctx, '✅ تم التعديل');
+      ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+    } on AdminApiException catch (e) {
+      if (ctx.mounted) _showErr(ctx, e.message);
+    }
+  }
+
+  // Hard delete (deactivate) a provider with confirm.
+  Future<void> _confirmDeleteProvider(BuildContext ctx, ServiceProvider p) async {
+    final ok = await showDialog<bool>(context: ctx, builder: (_) => AlertDialog(
+      title: const Text('حذف المزود'),
+      content: Text('سيتم إخفاء "${p.displayName}" وكل خدماته الفرعية من العملاء. متأكد؟'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حذف', style: TextStyle(color: AC.error))),
+      ],
+    ));
+    if (ok != true) return;
+    try {
+      await AdminServicesRepo().deleteProvider(p.id);
+      if (!ctx.mounted) return;
+      _showOk(ctx, 'تم الحذف');
+      ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+    } on AdminApiException catch (e) {
+      if (ctx.mounted) _showErr(ctx, e.message);
+    }
+  }
+
+  // Hard delete (deactivate) a sub-service with confirm.
+  Future<void> _confirmDeleteSub(BuildContext ctx, SubService sub) async {
+    final ok = await showDialog<bool>(context: ctx, builder: (_) => AlertDialog(
+      title: const Text('حذف الخدمة الفرعية'),
+      content: Text('سيتم إخفاء "${sub.nameAr}" من العملاء. متأكد؟'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حذف', style: TextStyle(color: AC.error))),
+      ],
+    ));
+    if (ok != true) return;
+    try {
+      await AdminServicesRepo().deleteSubService(sub.id);
+      if (!ctx.mounted) return;
+      _showOk(ctx, 'تم الحذف');
+      ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+    } on AdminApiException catch (e) {
+      if (ctx.mounted) _showErr(ctx, e.message);
+    }
+  }
+}
+
+// Edits an existing provider's displayName + category. Stateful so it disposes safely.
+class _EditProviderDialog extends StatefulWidget {
+  final ServiceProvider provider;
+  const _EditProviderDialog({required this.provider});
+  @override State<_EditProviderDialog> createState() => _EditProviderDialogState();
+}
+class _EditProviderDialogState extends State<_EditProviderDialog> {
+  late final TextEditingController _display;
+  late String _category;
+  static const _cats = ['TELECOM','ELECTRICITY','GAS','WATER','INTERNET','INSURANCE','GOVERNMENT'];
+  @override
+  void initState() {
+    super.initState();
+    _display = TextEditingController(text: widget.provider.displayName);
+    _category = _cats.contains(widget.provider.category) ? widget.provider.category : 'TELECOM';
+  }
+  @override void dispose() { _display.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext ctx) => AlertDialog(
+    title: Text('تعديل ${widget.provider.displayName}'),
+    content: SizedBox(width: 320, child: Column(mainAxisSize: MainAxisSize.min, children: [
+      TextField(controller: _display, decoration: const InputDecoration(labelText: 'الاسم المعروض', border: OutlineInputBorder())),
+      const SizedBox(height: 12),
+      DropdownButtonFormField<String>(
+        value: _category,
+        decoration: const InputDecoration(labelText: 'الفئة', border: OutlineInputBorder()),
+        items: _cats.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+        onChanged: (v) => setState(() => _category = v ?? _category),
+      ),
+    ])),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+      TextButton(onPressed: () {
+        if (_display.text.trim().isEmpty) {
+          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('الاسم المعروض مطلوب'), backgroundColor: AC.error));
+          return;
+        }
+        Navigator.pop(ctx, <String,dynamic>{
+          'displayName': _display.text.trim(),
+          'category': _category,
+        });
+      }, child: const Text('حفظ')),
+    ],
+  );
+}
+
+// Edits an existing sub-service's Arabic name and fees. Stateful → safe dispose.
+class _EditSubServiceDialog extends StatefulWidget {
+  final SubService sub;
+  const _EditSubServiceDialog({required this.sub});
+  @override State<_EditSubServiceDialog> createState() => _EditSubServiceDialogState();
+}
+class _EditSubServiceDialogState extends State<_EditSubServiceDialog> {
+  late final TextEditingController _nameAr;
+  late final TextEditingController _fixed;
+  late final TextEditingController _pct;
+  @override
+  void initState() {
+    super.initState();
+    _nameAr = TextEditingController(text: widget.sub.nameAr);
+    _fixed  = TextEditingController(text: widget.sub.fixedFee.toString());
+    _pct    = TextEditingController(text: (widget.sub.percentageFee * 100).toString());
+  }
+  @override void dispose() { _nameAr.dispose(); _fixed.dispose(); _pct.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext ctx) => AlertDialog(
+    title: Text('تعديل ${widget.sub.nameAr}'),
+    content: SizedBox(width: 320, child: Column(mainAxisSize: MainAxisSize.min, children: [
+      TextField(controller: _nameAr, decoration: const InputDecoration(labelText: 'الاسم بالعربية', border: OutlineInputBorder())),
+      const SizedBox(height: 12),
+      TextField(controller: _fixed, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(labelText: 'الرسوم الثابتة (ج.م)', border: OutlineInputBorder())),
+      const SizedBox(height: 12),
+      TextField(controller: _pct, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(labelText: 'النسبة المئوية (%)', border: OutlineInputBorder())),
+    ])),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+      TextButton(onPressed: () {
+        final n = _nameAr.text.trim();
+        if (n.isEmpty) {
+          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('الاسم بالعربية مطلوب'), backgroundColor: AC.error));
+          return;
+        }
+        final fixed = double.tryParse(_fixed.text.trim()) ?? widget.sub.fixedFee;
+        final pct   = (double.tryParse(_pct.text.trim()) ?? widget.sub.percentageFee * 100) / 100;
+        Navigator.pop(ctx, <String,dynamic>{
+          'nameAr': n,
+          'fixedFee': fixed,
+          'percentageFee': pct,
+        });
+      }, child: const Text('حفظ')),
+    ],
+  );
 }
 
 /// Small avatar that renders a network image (with cache) or falls back to an icon.
@@ -849,7 +1043,57 @@ class _ANotifsState extends State<AdminNotifsScreen> {
 // ════════════════════════════════════════════════════════
 //  SETTINGS SCREEN
 // ════════════════════════════════════════════════════════
-class SettingsScreen extends StatelessWidget { const SettingsScreen({super.key}); @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,appBar:AppBar(title:const Text('الإعدادات'),backgroundColor:AC.primary),drawer:const AdminDrawer(),body:ListView(padding:const EdgeInsets.all(AD.md),children:[ACard(child:ListTile(leading:const Icon(Icons.logout_rounded,color:AC.error),title:Text('تسجيل الخروج',style:AT.body.copyWith(color:AC.error)),onTap:()=>ctx.read<AdminAuthBloc>().add(AdminLogoutEvent())))])); }
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+  @override State<SettingsScreen> createState() => _SettingsState();
+}
+class _SettingsState extends State<SettingsScreen> {
+  bool _bioEnabled = false; bool _bioAvailable = false; String _bioLabel = 'القياس الحيوي';
+  @override void initState() { super.initState(); _loadBio(); }
+  Future<void> _loadBio() async {
+    final svc = AdminBiometricService.instance;
+    final available = await svc.canUseBiometrics();
+    final enabled   = await svc.isEnabled();
+    final label     = await svc.bestAvailableLabel();
+    if (mounted) setState(() { _bioAvailable = available; _bioEnabled = enabled; _bioLabel = label; });
+  }
+  Future<void> _toggleBio(bool v) async {
+    final svc = AdminBiometricService.instance;
+    if (v) {
+      final ok = await svc.authenticate(reason: 'تأكيد لتفعيل الدخول بـ$_bioLabel');
+      if (!ok) {
+        if (mounted) _showErr(context, 'تعذر تفعيل $_bioLabel');
+        return;
+      }
+    }
+    await svc.setEnabled(v);
+    if (mounted) {
+      setState(() => _bioEnabled = v);
+      _showOk(context, v ? 'تم تفعيل $_bioLabel' : 'تم إيقاف $_bioLabel');
+    }
+  }
+  @override
+  Widget build(BuildContext ctx) => Scaffold(
+    backgroundColor: AC.bg,
+    appBar: AppBar(title: const Text('الإعدادات'), backgroundColor: AC.primary),
+    drawer: const AdminDrawer(),
+    body: ListView(padding: const EdgeInsets.all(AD.md), children: [
+      if (_bioAvailable) ACard(child: SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.fingerprint_rounded, color: AC.primary),
+        title: Text('الدخول بـ$_bioLabel', style: AT.bodyM),
+        subtitle: Text(_bioEnabled ? 'مفعل — يُطلب منك التحقق عند فتح اللوحة' : 'غير مفعل', style: AT.cap),
+        value: _bioEnabled, onChanged: _toggleBio, activeColor: AC.primary,
+      )),
+      if (_bioAvailable) const SizedBox(height: AD.md),
+      ACard(child: ListTile(
+        leading: const Icon(Icons.logout_rounded, color: AC.error),
+        title: Text('تسجيل الخروج', style: AT.body.copyWith(color: AC.error)),
+        onTap: () => ctx.read<AdminAuthBloc>().add(AdminLogoutEvent()),
+      )),
+    ]),
+  );
+}
 
 
 // ════════════════════════════════════════════════════════
@@ -988,5 +1232,40 @@ class _ReportsState extends State<ReportsScreen> with SingleTickerProviderStateM
           }),
         ])),
       ]),
+  );
+}
+
+// ════════════════════════════════════════════════════════
+//  STATEFUL DIALOG — safely owns its TextEditingController
+// ════════════════════════════════════════════════════════
+class _SetAmountDialog extends StatefulWidget {
+  final String initial;
+  const _SetAmountDialog({required this.initial});
+  @override State<_SetAmountDialog> createState() => _SetAmountDialogState();
+}
+class _SetAmountDialogState extends State<_SetAmountDialog> {
+  late final TextEditingController _amt;
+  @override void initState() { super.initState(); _amt = TextEditingController(text: widget.initial); }
+  @override void dispose() { _amt.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext ctx) => AlertDialog(
+    title: const Text('تحديد مبلغ الفاتورة'),
+    content: TextField(
+      controller: _amt,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textDirection: TextDirection.ltr,
+      decoration: const InputDecoration(labelText: 'المبلغ (ج.م)', border: OutlineInputBorder()),
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+      TextButton(onPressed: () {
+        final v = double.tryParse(_amt.text.trim());
+        if (v == null || v <= 0) {
+          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('أدخل مبلغاً صحيحاً'), backgroundColor: AC.error));
+          return;
+        }
+        Navigator.pop(ctx, v);
+      }, child: const Text('تأكيد')),
+    ],
   );
 }

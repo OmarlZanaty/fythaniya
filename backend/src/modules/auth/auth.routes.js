@@ -33,12 +33,12 @@ router.post('/register', authLimiter,
         },
       });
 
-      // Welcome bonus
+      // Welcome bonus (reduced from 50 → 20 points)
       await prisma.$transaction([
         prisma.rewardTransaction.create({
-          data: { userId: user.id, points: 50, isEarned: true, reason: 'مكافأة ترحيبية' },
+          data: { userId: user.id, points: 20, isEarned: true, reason: 'مكافأة ترحيبية' },
         }),
-        prisma.user.update({ where: { id: user.id }, data: { pointsBalance: { increment: 50 } } }),
+        prisma.user.update({ where: { id: user.id }, data: { pointsBalance: { increment: 20 } } }),
       ]);
 
       const accessToken  = jwtUtils.signUser({ id: user.id, phone: user.phone, type: user.type });
@@ -46,17 +46,17 @@ router.post('/register', authLimiter,
 
       await prisma.user.update({
         where: { id: user.id },
-        data: { refreshToken, refreshTokenExp: new Date(Date.now() + 7 * 86400000), lastLoginAt: new Date() },
+        data: { refreshToken, refreshTokenExp: new Date(Date.now() + 30 * 86400000), lastLoginAt: new Date() },
       });
 
-      await notifyUser(user.id, '🎉 مرحباً بك في فى ثانية', 'تم إنشاء حسابك بنجاح. رصيدك 50 نقطة مكافأة!', 'HIGH');
+      await notifyUser(user.id, '🎉 مرحباً بك في فى ثانية', 'تم إنشاء حسابك بنجاح. رصيدك 20 نقطة مكافأة!', 'HIGH');
 
       return apiResponse.success(res, {
         accessToken, refreshToken,
         user: {
           id: user.id, phone: user.phone, fullName: user.fullName,
           type: user.type, status: user.status,
-          pointsBalance: 50, walletBalance: 0,
+          pointsBalance: 20, walletBalance: 0,
         },
       }, 'تم إنشاء الحساب بنجاح', 201);
     } catch (err) { next(err); }
@@ -84,7 +84,7 @@ router.post('/login', authLimiter, [phoneRule, passRule], validate,
 
       await prisma.user.update({
         where: { id: user.id },
-        data: { refreshToken, refreshTokenExp: new Date(Date.now() + 7 * 86400000), lastLoginAt: new Date() },
+        data: { refreshToken, refreshTokenExp: new Date(Date.now() + 30 * 86400000), lastLoginAt: new Date() },
       });
 
       return apiResponse.success(res, {
@@ -111,7 +111,7 @@ router.post('/refresh-token', async (req, res, next) => {
     if (user.refreshTokenExp < new Date()) return apiResponse.error(res, 'Refresh token expired', 401);
     const newAccess  = jwtUtils.signUser({ id: user.id, phone: user.phone, type: user.type });
     const newRefresh = jwtUtils.signRefresh({ id: user.id });
-    await prisma.user.update({ where: { id: user.id }, data: { refreshToken: newRefresh, refreshTokenExp: new Date(Date.now() + 7 * 86400000) } });
+    await prisma.user.update({ where: { id: user.id }, data: { refreshToken: newRefresh, refreshTokenExp: new Date(Date.now() + 30 * 86400000) } });
     return apiResponse.success(res, { accessToken: newAccess, refreshToken: newRefresh });
   } catch (err) { next(err); }
 });

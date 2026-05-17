@@ -28,6 +28,7 @@ android {
 
     defaultConfig {
         applicationId = "com.almobarmg.fythaniya"
+        // local_auth needs minSdk 23 (Android 6.0) for BiometricPrompt API.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

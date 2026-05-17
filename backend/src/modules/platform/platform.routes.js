@@ -344,4 +344,105 @@ router.get('/admin/dashboard/export-csv', authenticateAdmin, async (req, res, ne
   } catch (err) { next(err); }
 });
 
+// ═══════════════════════════════════════════════════════════
+//  HOME TILES (admin-managed icon grid)
+// ═══════════════════════════════════════════════════════════
+
+// User: list active tiles, sorted by `order` then `createdAt`.
+router.get('/home-tiles', authenticateUser, async (req, res, next) => {
+  try {
+    const items = await prisma.homeTile.findMany({
+      where: { isActive: true },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, label: true, route: true, iconKey: true, colorHex: true,
+        category: true, order: true, requiresPayLater: true, badge: true },
+    });
+    return apiResponse.success(res, items);
+  } catch (err) { next(err); }
+});
+
+// Admin: full CRUD.
+router.get('/admin/home-tiles', authenticateAdmin, async (req, res, next) => {
+  try {
+    const items = await prisma.homeTile.findMany({
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    });
+    return apiResponse.success(res, items);
+  } catch (err) { next(err); }
+});
+
+router.post('/admin/home-tiles', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
+  [
+    body('label').notEmpty().isLength({ max: 60 }),
+    body('route').notEmpty().isLength({ max: 60 }),
+    body('iconKey').notEmpty().isLength({ max: 40 }),
+    body('colorHex').optional().matches(/^#[0-9A-Fa-f]{6}$/).withMessage('colorHex must be #RRGGBB'),
+    body('category').optional().isLength({ max: 40 }),
+    body('order').optional().isInt({ min: 0, max: 9999 }),
+    body('requiresPayLater').optional().isBoolean(),
+    body('badge').optional().isLength({ max: 20 }),
+  ], validate, async (req, res, next) => {
+    try {
+      const { label, route, iconKey, colorHex, category, order, requiresPayLater, badge, isActive } = req.body;
+      const item = await prisma.homeTile.create({
+        data: {
+          label: label.toString().trim(),
+          route: route.toString().trim(),
+          iconKey: iconKey.toString().trim(),
+          colorHex: (colorHex || '#3B82F6').toString(),
+          category: category ? category.toString().trim().toUpperCase() : null,
+          order: order ?? 0,
+          requiresPayLater: !!requiresPayLater,
+          badge: badge ? badge.toString().trim() : null,
+          isActive: isActive !== false,
+        },
+      });
+      return apiResponse.success(res, item, 'Tile created', 201);
+    } catch (err) { next(err); }
+  }
+);
+
+router.put('/admin/home-tiles/:id', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
+  async (req, res, next) => {
+    try {
+      const { label, route, iconKey, colorHex, category, order, requiresPayLater, badge, isActive } = req.body;
+      const data = {};
+      if (label    !== undefined) data.label    = label.toString().trim();
+      if (route    !== undefined) data.route    = route.toString().trim();
+      if (iconKey  !== undefined) data.iconKey  = iconKey.toString().trim();
+      if (colorHex !== undefined) data.colorHex = colorHex.toString();
+      if (category !== undefined) data.category = category ? category.toString().trim().toUpperCase() : null;
+      if (order    !== undefined) data.order    = Number(order);
+      if (requiresPayLater !== undefined) data.requiresPayLater = !!requiresPayLater;
+      if (badge    !== undefined) data.badge    = badge ? badge.toString().trim() : null;
+      if (isActive !== undefined) data.isActive = !!isActive;
+      const item = await prisma.homeTile.update({ where: { id: req.params.id }, data });
+      return apiResponse.success(res, item, 'Tile updated');
+    } catch (err) { next(err); }
+  }
+);
+
+router.delete('/admin/home-tiles/:id', authenticateAdmin, requireRole('SUPER_ADMIN'),
+  async (req, res, next) => {
+    try {
+      await prisma.homeTile.delete({ where: { id: req.params.id } });
+      return apiResponse.success(res, null, 'Tile deleted');
+    } catch (err) { next(err); }
+  }
+);
+
+// Bulk-reorder: accepts [{id, order}, ...]
+router.put('/admin/home-tiles/reorder', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
+  async (req, res, next) => {
+    try {
+      const items = req.body.items;
+      if (!Array.isArray(items)) return apiResponse.error(res, 'items must be an array', 400);
+      await prisma.$transaction(items.map(it =>
+        prisma.homeTile.update({ where: { id: it.id }, data: { order: Number(it.order) } })
+      ));
+      return apiResponse.success(res, null, 'Reordered');
+    } catch (err) { next(err); }
+  }
+);
+
 module.exports = router;

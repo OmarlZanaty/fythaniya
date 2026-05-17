@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'admin_core.dart';
@@ -31,8 +32,22 @@ class AdminApiClient {
   void init(){
     if(_ready)return; _ready=true;
     _dio=Dio(BaseOptions(baseUrl:AdminConstants.baseUrl,connectTimeout:const Duration(seconds:30),receiveTimeout:const Duration(seconds:30),headers:{'Content-Type':'application/json','Accept':'application/json'}));
-    _dio.interceptors.add(InterceptorsWrapper(onRequest:(opts,handler)async{final tok=await _sec.read(key:AdminConstants.tokenKey);if(tok!=null)opts.headers['Authorization']='Bearer $tok';return handler.next(opts);}));
+    _dio.interceptors.add(InterceptorsWrapper(onRequest:(opts,handler)async{final tok=await _safeRead(AdminConstants.tokenKey);if(tok!=null)opts.headers['Authorization']='Bearer $tok';return handler.next(opts);}));
     if(kDebugMode)_dio.interceptors.add(LogInterceptor(requestBody:true,responseBody:true,logPrint:(o)=>debugPrint('[ADMIN API] $o')));
+  }
+
+  // Defends against Android-keystore "AEADBadTagException" / "unwrap key failed" after
+  // app reinstall or device-key resets. Wipes and returns null instead of throwing.
+  Future<String?> _safeRead(String key) async {
+    try { return await _sec.read(key: key); }
+    on PlatformException catch (e) {
+      debugPrint('[AdminApiClient] secure-storage read failed ($key): ${e.code} — wiping store');
+      try { await _sec.deleteAll(); } catch (_) {}
+      return null;
+    } catch (e) {
+      debugPrint('[AdminApiClient] secure-storage unexpected error ($key): $e');
+      return null;
+    }
   }
 
   Map<String,dynamic> _ensureMap(dynamic d){if(d is Map<String,dynamic>)return d;if(d is Map)return Map<String,dynamic>.from(d);throw const AdminApiException('Invalid server response',statusCode:0);}
@@ -40,8 +55,11 @@ class AdminApiClient {
   Future<Map<String,dynamic>> post(String path,{Map<String,dynamic>? body})async{try{final r=await _dio.post(path,data:body);return _ensureMap(r.data);}on DioException catch(e){throw AdminApiException.fromDio(e);}}
   Future<Map<String,dynamic>> put(String path,{Map<String,dynamic>? body})async{try{final r=await _dio.put(path,data:body);return _ensureMap(r.data);}on DioException catch(e){throw AdminApiException.fromDio(e);}}
   Future<void> saveToken(String t)=>_sec.write(key:AdminConstants.tokenKey,value:t);
-  Future<String?> getToken()=>_sec.read(key:AdminConstants.tokenKey);
-  Future<void> clearToken()=>_sec.delete(key:AdminConstants.tokenKey);
+  Future<String?> getToken()=>_safeRead(AdminConstants.tokenKey);
+  Future<void> clearToken() async {
+    try { await _sec.delete(key: AdminConstants.tokenKey); }
+    catch (e) { debugPrint('[AdminApiClient] clearToken fallback to deleteAll: $e'); try { await _sec.deleteAll(); } catch (_) {} }
+  }
 }
 
 // ── Admin Repositories ─────────────────────────────────────
@@ -125,6 +143,27 @@ class AdminPaymentNumbersRepo {
     try { await _c._dio.delete('/admin/payment-numbers/$id'); }
     on DioException catch (e) { throw AdminApiException.fromDio(e); }
   }
+}
+
+// ── Admin Home Tiles ──────────────────────────────────────
+class AdminHomeTilesRepo {
+  final _c = AdminApiClient.instance;
+  Future<List<Map<String,dynamic>>> list() async {
+    final res = await _c.get('/admin/home-tiles');
+    return ((res['data'] as List<dynamic>?) ?? []).cast<Map<String,dynamic>>();
+  }
+  Future<Map<String,dynamic>> create(Map<String,dynamic> body) async {
+    final res = await _c.post('/admin/home-tiles', body: body);
+    return res['data'] as Map<String,dynamic>;
+  }
+  Future<void> update(String id, Map<String,dynamic> body) =>
+    _c.put('/admin/home-tiles/$id', body: body);
+  Future<void> delete(String id) async {
+    try { await _c._dio.delete('/admin/home-tiles/$id'); }
+    on DioException catch (e) { throw AdminApiException.fromDio(e); }
+  }
+  Future<void> reorder(List<Map<String,dynamic>> items) =>
+    _c.put('/admin/home-tiles/reorder', body: {'items': items});
 }
 
 // ── Admin Settings ────────────────────────────────────────

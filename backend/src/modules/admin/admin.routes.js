@@ -173,8 +173,8 @@ router.put('/requests/:id/complete', requireRole('TRANSACTION_PROCESSOR','B2B_MA
               amount: r.amount, fee: r.fee, totalAmount: r.totalAmount,
               status: 'SUCCESS', paymentMethod: 'WALLET', externalRef: externalRef || null },
           });
-          // Reward points: 1 point per 10 EGP
-          const pts = Math.floor(Number(r.amount) / 10);
+          // Reward points: 1 point per 100 EGP, capped at 50 per transaction (was 1pt/10 EGP).
+          const pts = Math.min(50, Math.floor(Number(r.amount) / 100));
           if (pts > 0) {
             await tx.user.update({ where: { id: r.userId }, data: { pointsBalance: { increment: pts } } });
             await tx.rewardTransaction.create({ data: { userId: r.userId, points: pts, isEarned: true, reason: 'مكافأة معاملة', referenceId: r.id } });

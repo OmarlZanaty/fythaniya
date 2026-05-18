@@ -176,7 +176,8 @@ class AdminConstants {
 
 class AdminRoutes {
   AdminRoutes._();
-  static const String login      = '/';
+  static const String splash     = '/';
+  static const String login      = '/login';
   static const String dashboard  = '/dashboard';
   static const String requests   = '/requests';
   static const String requestDetail = '/requests/:id';
@@ -192,6 +193,44 @@ class AdminRoutes {
   static const String clients    = '/clients';
   static const String appSettings= '/app-settings';
   static const String homeTiles  = '/home-tiles';
+}
+
+// ═══════════════════════════════════════════════════════════
+// SHARED BOTTOM NAV
+// Used by main tabs and secondary screens. Pass `current: null` (or any
+// non-matching string) on secondary screens to skip highlighting.
+// ═══════════════════════════════════════════════════════════
+class AdminBottomNav extends StatelessWidget {
+  final String? current; // 'dashboard' | 'requests' | 'b2b' | 'services' | 'reports' | null
+  const AdminBottomNav({super.key, this.current});
+  static const _items = [
+    ('dashboard', Icons.dashboard_rounded,  'الرئيسية', AdminRoutes.dashboard),
+    ('requests',  Icons.queue_rounded,      'الطلبات',  AdminRoutes.requests),
+    ('b2b',       Icons.business_rounded,   'شركات',    AdminRoutes.b2b),
+    ('services',  Icons.tune_rounded,       'الخدمات',  AdminRoutes.services),
+    ('reports',   Icons.assessment_rounded, 'التقارير', AdminRoutes.reports),
+  ];
+  @override
+  Widget build(BuildContext context) {
+    final idx = _items.indexWhere((it) => it.$1 == current);
+    return BottomNavigationBar(
+      type: BottomNavigationBarType.fixed,
+      selectedItemColor: AC.primary, unselectedItemColor: AC.textMuted,
+      backgroundColor: AC.surface, elevation: 8,
+      // When current is null/unknown we still need a valid index, but we
+      // de-emphasize selection by giving the unselected color to the "selected" tile.
+      currentIndex: idx == -1 ? 0 : idx,
+      onTap: (i) {
+        final target = _items[i].$4;
+        if (_items[i].$1 == current) return;
+        context.go(target);
+      },
+      items: _items.map((it) => BottomNavigationBarItem(
+        icon: Icon(it.$2, color: idx == -1 ? AC.textMuted : null),
+        label: it.$3,
+      )).toList(),
+    );
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

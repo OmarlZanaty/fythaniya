@@ -42,15 +42,28 @@ class _AdminAppState extends State<AdminApp> {
     _auth=AdminAuthBloc();
     _notifier=_AuthNotifier(_auth);
     _router=GoRouter(
-      initialLocation:AdminRoutes.login,
+      initialLocation:AdminRoutes.splash,
       refreshListenable:_notifier,
+      // Auth gate: never redirect while the bloc is in its Initial/Loading state
+      // (the splash handles those). On LoggedIn route to dashboard, on LoggedOut
+      // route to login. Splash dispatches AdminCheckEvent on boot so a stored
+      // token auto-logs the admin back in.
       redirect:(ctx,state){
         final s=_auth.state; final loc=state.uri.path;
-        if(s is AdminAuthLoggedIn&&loc==AdminRoutes.login) return AdminRoutes.dashboard;
-        if(s is AdminAuthLoggedOut&&loc!=AdminRoutes.login) return AdminRoutes.login;
+        if (s is AdminAuthInitial || s is AdminAuthLoading) {
+          // Stay on splash; if we're elsewhere, send us there.
+          return loc == AdminRoutes.splash ? null : AdminRoutes.splash;
+        }
+        if (s is AdminAuthLoggedIn) {
+          if (loc == AdminRoutes.splash || loc == AdminRoutes.login) return AdminRoutes.dashboard;
+          return null;
+        }
+        // LoggedOut / Error
+        if (loc != AdminRoutes.login) return AdminRoutes.login;
         return null;
       },
       routes:[
+        GoRoute(path:AdminRoutes.splash,   builder:(_,__)=>const AdminSplashScreen()),
         GoRoute(path:AdminRoutes.login,    builder:(_,__)=>const LoginScreen()),
         GoRoute(path:AdminRoutes.dashboard,builder:(_,__)=>const AdminShell(child:DashboardScreen())),
         GoRoute(path:AdminRoutes.requests, builder:(_,__)=>const AdminShell(child:RequestsScreen())),
@@ -131,31 +144,7 @@ class StatusBadge extends StatelessWidget {
   }
 }
 
-/// Bottom navigation shared across the main admin screens.
-class AdminBottomNav extends StatelessWidget {
-  final String current; // 'dashboard' | 'requests' | 'b2b' | 'services' | 'reports'
-  const AdminBottomNav({super.key, required this.current});
-  static const _items = [
-    ('dashboard', Icons.dashboard_rounded,     'الرئيسية', AdminRoutes.dashboard),
-    ('requests',  Icons.queue_rounded,         'الطلبات',  AdminRoutes.requests),
-    ('b2b',       Icons.business_rounded,      'شركات',   AdminRoutes.b2b),
-    ('services',  Icons.tune_rounded,          'الخدمات',  AdminRoutes.services),
-    ('reports',   Icons.assessment_rounded,    'التقارير', AdminRoutes.reports),
-  ];
-  @override
-  Widget build(BuildContext context) => BottomNavigationBar(
-    type: BottomNavigationBarType.fixed,
-    selectedItemColor: AC.primary, unselectedItemColor: AC.textMuted,
-    backgroundColor: AC.surface, elevation: 8,
-    currentIndex: _items.indexWhere((it) => it.$1 == current).clamp(0, _items.length - 1),
-    onTap: (i) {
-      final target = _items[i].$4;
-      if (_items[i].$1 == current) return;
-      context.go(target);
-    },
-    items: _items.map((it) => BottomNavigationBarItem(icon: Icon(it.$2), label: it.$3)).toList(),
-  );
-}
+// (AdminBottomNav lives in admin_core.dart so secondary screens can use it too.)
 
 class StatCard extends StatelessWidget {
   final String label;final String value;final IconData icon;final Color color;final String?subtitle;final VoidCallback? onTap;
@@ -176,6 +165,64 @@ void _showErr(BuildContext ctx,String msg)=>ScaffoldMessenger.of(ctx).showSnackB
 void _showOk(BuildContext ctx,String msg)=>ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text(msg),backgroundColor:AC.success));
 
 // ════════════════════════════════════════════════════════
+//  SPLASH SCREEN — checks stored token + gates biometric on cold start
+// ════════════════════════════════════════════════════════
+class AdminSplashScreen extends StatefulWidget {
+  const AdminSplashScreen({super.key});
+  @override State<AdminSplashScreen> createState() => _AdminSplashState();
+}
+class _AdminSplashState extends State<AdminSplashScreen> {
+  bool _bioRan = false;
+  @override
+  void initState() {
+    super.initState();
+    // Kick the auth check on next frame so the bloc provider is mounted.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminAuthBloc>().add(AdminCheckEvent());
+    });
+  }
+
+  Future<void> _runBiometricGate(BuildContext ctx) async {
+    if (_bioRan) return;
+    _bioRan = true;
+    final svc = AdminBiometricService.instance;
+    if (await svc.isEnabled() && await svc.canUseBiometrics()) {
+      final ok = await svc.authenticate();
+      if (!ok && ctx.mounted) {
+        // Failed scan → drop the session, router will send us to /login.
+        ctx.read<AdminAuthBloc>().add(AdminLogoutEvent());
+        _bioRan = false;
+      }
+    }
+    if (ctx.mounted) AdminSocketService.instance.connect();
+  }
+
+  @override
+  Widget build(BuildContext context) => BlocListener<AdminAuthBloc, AdminAuthState>(
+    listener: (ctx, s) async {
+      if (s is AdminAuthLoggedIn) await _runBiometricGate(ctx);
+    },
+    child: Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(gradient: AG.hero),
+        child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 120, height: 120,
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28),
+              boxShadow: [BoxShadow(color: AC.light.withOpacity(0.4), blurRadius: 36, spreadRadius: 4)]),
+            padding: const EdgeInsets.all(14),
+            child: ClipRRect(borderRadius: BorderRadius.circular(16),
+              child: Image.asset('assets/images/logo.png', fit: BoxFit.contain))),
+          const SizedBox(height: 24),
+          Text('فى ثانية', style: AT.h1.copyWith(color: Colors.white, fontSize: 28, letterSpacing: 0.5)),
+          const SizedBox(height: 32),
+          const CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+        ])),
+      ),
+    ),
+  );
+}
+
+// ════════════════════════════════════════════════════════
 //  LOGIN SCREEN
 // ════════════════════════════════════════════════════════
 class LoginScreen extends StatefulWidget { const LoginScreen({super.key}); @override State<LoginScreen> createState()=>_LoginState(); }
@@ -189,23 +236,10 @@ class _LoginState extends State<LoginScreen> {
     Text('لوحة الإدارة',style:AT.cap.copyWith(color:Colors.white.withOpacity(0.85))),
     const SizedBox(height:48),
     Expanded(child:Container(decoration:const BoxDecoration(color:AC.bg,borderRadius:BorderRadius.vertical(top:Radius.circular(28))),child:BlocConsumer<AdminAuthBloc,AdminAuthState>(
-      listener:(ctx,s) async {
-        if (s is AdminAuthLoggedIn) {
-          // Biometric gate: if the admin opted in AND the device supports it, require a
-          // successful scan before entering the dashboard. Failure = sign out.
-          final svc = AdminBiometricService.instance;
-          if (await svc.isEnabled() && await svc.canUseBiometrics()) {
-            final ok = await svc.authenticate();
-            if (!ok) {
-              if (!ctx.mounted) return;
-              ctx.read<AdminAuthBloc>().add(AdminLogoutEvent());
-              return;
-            }
-          }
-          if (!ctx.mounted) return;
-          AdminSocketService.instance.connect();
-          ctx.go(AdminRoutes.dashboard);
-        }
+      listener:(ctx,s) {
+        // Successful auth: just connect the socket. The router redirect handles
+        // moving us to /dashboard, and the splash gates biometric on cold-start.
+        if (s is AdminAuthLoggedIn) AdminSocketService.instance.connect();
         if (s is AdminAuthError) _showErr(ctx, s.msg);
       },
       builder:(ctx,s)=>SingleChildScrollView(padding:const EdgeInsets.all(AD.xl),child:Form(key:_form,child:Column(children:[

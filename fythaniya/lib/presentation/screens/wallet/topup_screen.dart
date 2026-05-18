@@ -9,6 +9,7 @@ import 'package:fythaniya/core/constants/constants.dart';
 import 'package:fythaniya/core/network/api_client.dart';
 import 'package:fythaniya/presentation/blocs/blocs.dart';
 import 'package:fythaniya/presentation/widgets/common/widgets.dart';
+import 'package:fythaniya/presentation/screens/phase2/phase2_screens.dart';
 
 class TopUpScreen extends StatefulWidget {
   const TopUpScreen({super.key});
@@ -112,6 +113,18 @@ class _TopUpScreenState extends State<TopUpScreen> {
                 items: _methods.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: TS.body))).toList(),
                 onChanged: (v) => setState(() => _paymentMethod = v ?? 'BANK_TRANSFER'),
                 decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+              ),
+              const SizedBox(height: D.md),
+              // Admin-managed payment numbers for the selected method.
+              // Maps the UI method to the backend PaymentNumber.type enum:
+              //   BANK_TRANSFER → BANK   |   VODAFONE_CASH → WALLET   |   INSTAPAY → INSTAPAY
+              Text('حول إلى أحد الأرقام التالية ثم ارفع إثبات الدفع', style: TS.cap.copyWith(color: AppColors.textSec)),
+              const SizedBox(height: D.sm),
+              PaymentNumbersBlock(
+                key: ValueKey('pn-$_paymentMethod'),
+                type: _paymentMethod == 'BANK_TRANSFER' ? 'BANK'
+                     : _paymentMethod == 'INSTAPAY'      ? 'INSTAPAY'
+                     : 'WALLET',
               ),
               const SizedBox(height: D.md),
               const Divider(),

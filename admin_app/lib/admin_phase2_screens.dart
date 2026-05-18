@@ -1,8 +1,17 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'admin_core.dart';
 import 'admin_api.dart';
+
+// Shared helper: explicit back-to-dashboard button for secondary screens that
+// were reached via `ctx.go(...)` from the drawer (so there's nothing to pop).
+Widget _backToDashboard(BuildContext ctx) => IconButton(
+  icon: const Icon(Icons.arrow_back_ios_new_rounded),
+  tooltip: 'الرجوع',
+  onPressed: () => ctx.go(AdminRoutes.dashboard),
+);
 
 // Helpers reused from main.dart
 void _showErr(BuildContext ctx, String msg) =>
@@ -117,9 +126,16 @@ class _PNState extends State<PaymentNumbersScreen> {
   @override
   Widget build(BuildContext ctx) => Scaffold(
     backgroundColor: AC.bg,
-    appBar: AppBar(title: const Text('أرقام الدفع'), backgroundColor: AC.primary, actions: [
-      IconButton(icon: const Icon(Icons.add_rounded), onPressed: () => _showForm()),
-    ]),
+    appBar: AppBar(
+      title: const Text('أرقام الدفع'),
+      backgroundColor: AC.primary,
+      automaticallyImplyLeading: false,
+      leading: _backToDashboard(ctx),
+      actions: [
+        IconButton(icon: const Icon(Icons.add_rounded), onPressed: () => _showForm()),
+      ],
+    ),
+    bottomNavigationBar: const AdminBottomNav(),
     body: _loading
       ? const Center(child: CircularProgressIndicator(color: AC.primary))
       : RefreshIndicator(onRefresh: _load, color: AC.primary, child: _items.isEmpty
@@ -183,7 +199,13 @@ class _CSState extends State<ClientSearchScreen> {
   @override
   Widget build(BuildContext ctx) => Scaffold(
     backgroundColor: AC.bg,
-    appBar: AppBar(title: const Text('بحث العملاء'), backgroundColor: AC.primary),
+    appBar: AppBar(
+      title: const Text('بحث العملاء'),
+      backgroundColor: AC.primary,
+      automaticallyImplyLeading: false,
+      leading: _backToDashboard(ctx),
+    ),
+    bottomNavigationBar: const AdminBottomNav(),
     body: Column(children: [
       Padding(padding: const EdgeInsets.all(AD.md), child: TextField(
         controller: _q, textDirection: TextDirection.rtl,
@@ -268,6 +290,25 @@ class HomeTilesScreen extends StatefulWidget {
   const HomeTilesScreen({super.key});
   @override State<HomeTilesScreen> createState() => _HomeTilesState();
 }
+// Default tile set seeded once when the admin first opens an empty list.
+// Mirrors the user-app fallback so that "add tile" appends instead of replacing.
+const _kDefaultTiles = <Map<String,dynamic>>[
+  {'label':'شحن رصيد',     'route':'recharge',      'iconKey':'smartphone',   'colorHex':'#9333EA', 'category':'TELECOM',    'order': 0},
+  {'label':'فواتير موبايل','route':'bill_telecom',  'iconKey':'phone',        'colorHex':'#9333EA', 'category':'TELECOM',    'order': 1},
+  {'label':'كهرباء',       'route':'bill_elec',     'iconKey':'bolt',         'colorHex':'#F59E0B', 'category':'ELECTRICITY','order': 2},
+  {'label':'غاز',          'route':'bill_gas',      'iconKey':'gas',          'colorHex':'#EF4444', 'category':'GAS',        'order': 3},
+  {'label':'مياه',         'route':'bill_water',    'iconKey':'water',        'colorHex':'#0EA5E9', 'category':'WATER',      'order': 4},
+  {'label':'إنترنت',       'route':'bill_internet', 'iconKey':'wifi',         'colorHex':'#10B981', 'category':'INTERNET',   'order': 5},
+  {'label':'InstaPay',     'route':'instapay',      'iconKey':'instapay',     'colorHex':'#3B82F6', 'category':null,         'order': 6},
+  {'label':'تحويل بنكي',   'route':'bank_transfer', 'iconKey':'bank',         'colorHex':'#7C3AED', 'category':null,         'order': 7},
+  {'label':'شركات',        'route':'b2b',           'iconKey':'business',     'colorHex':'#7C3AED', 'category':null,         'order': 8},
+  {'label':'فودافون كاش',  'route':'vodafone_cash', 'iconKey':'wallet',       'colorHex':'#9333EA', 'category':'TELECOM',    'order': 9, 'requiresPayLater': true},
+  {'label':'مكافآت',       'route':'rewards',       'iconKey':'rewards',      'colorHex':'#F59E0B', 'category':null,         'order':10},
+  {'label':'الإشعارات',    'route':'notifs',        'iconKey':'notifications','colorHex':'#06B6D4', 'category':null,         'order':11},
+  {'label':'محفظتي',       'route':'wallet',        'iconKey':'wallet',       'colorHex':'#0F1729', 'category':null,         'order':12},
+  {'label':'الدفع الآجل',  'route':'pay_later',     'iconKey':'pay_later',    'colorHex':'#F59E0B', 'category':null,         'order':13, 'requiresPayLater': true},
+];
+
 class _HomeTilesState extends State<HomeTilesScreen> {
   List<Map<String,dynamic>> _items = [];
   bool _loading = true;
@@ -276,7 +317,18 @@ class _HomeTilesState extends State<HomeTilesScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final items = await AdminHomeTilesRepo().list();
+      var items = await AdminHomeTilesRepo().list();
+      // First time the admin opens the screen, seed the defaults so they have a
+      // baseline to edit/reorder/extend. Without this, adding the first tile
+      // would make it the ONLY tile in the user app (the fallback list only
+      // shows when the API returns []).
+      if (items.isEmpty) {
+        for (final t in _kDefaultTiles) {
+          try { await AdminHomeTilesRepo().create(Map<String,dynamic>.from(t)); }
+          catch (_) {/* ignore individual seed failures */}
+        }
+        items = await AdminHomeTilesRepo().list();
+      }
       if (mounted) setState(() { _items = items; _loading = false; });
     } catch (e) { if (mounted) { setState(() => _loading = false); _showErr(context, '$e'); } }
   }
@@ -322,9 +374,16 @@ class _HomeTilesState extends State<HomeTilesScreen> {
   @override
   Widget build(BuildContext ctx) => Scaffold(
     backgroundColor: AC.bg,
-    appBar: AppBar(title: const Text('أيقونات الرئيسية'), backgroundColor: AC.primary, actions: [
-      IconButton(icon: const Icon(Icons.add_rounded), tooltip: 'إضافة', onPressed: () => _showForm()),
-    ]),
+    appBar: AppBar(
+      title: const Text('أيقونات الرئيسية'),
+      backgroundColor: AC.primary,
+      automaticallyImplyLeading: false,
+      leading: _backToDashboard(ctx),
+      actions: [
+        IconButton(icon: const Icon(Icons.add_rounded), tooltip: 'إضافة', onPressed: () => _showForm()),
+      ],
+    ),
+    bottomNavigationBar: const AdminBottomNav(),
     body: _loading
       ? const Center(child: CircularProgressIndicator(color: AC.primary))
       : RefreshIndicator(color: AC.primary, onRefresh: _load, child: _items.isEmpty
@@ -606,7 +665,13 @@ class _SetState extends State<AdminSettingsScreen> {
   @override
   Widget build(BuildContext ctx) => Scaffold(
     backgroundColor: AC.bg,
-    appBar: AppBar(title: const Text('إعدادات التطبيق'), backgroundColor: AC.primary),
+    appBar: AppBar(
+      title: const Text('إعدادات التطبيق'),
+      backgroundColor: AC.primary,
+      automaticallyImplyLeading: false,
+      leading: _backToDashboard(ctx),
+    ),
+    bottomNavigationBar: const AdminBottomNav(),
     body: _loading
       ? const Center(child: CircularProgressIndicator(color: AC.primary))
       : ListView(padding: const EdgeInsets.all(AD.md), children: [

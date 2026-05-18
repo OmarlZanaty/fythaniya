@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:fythaniya/core/constants/constants.dart';
 import 'package:fythaniya/core/network/api_client.dart';
 
 @pragma('vm:entry-point')
@@ -17,6 +18,28 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
   bool _firebaseReady = false;
+
+  // Router hook installed by main.dart so taps can navigate to /request/:id.
+  // Stashed payload (for cold-start taps that fire before the router is ready).
+  void Function(String path)? _navigate;
+  String? _pendingNavPath;
+  void attachRouter(void Function(String path) navigate) {
+    _navigate = navigate;
+    final pending = _pendingNavPath;
+    if (pending != null) {
+      _pendingNavPath = null;
+      navigate(pending);
+    }
+  }
+  void _routeToRequest(String? requestId) {
+    if (requestId == null || requestId.isEmpty) return;
+    final path = '${AppRoutes.requestDetail}/$requestId';
+    if (_navigate != null) {
+      _navigate!(path);
+    } else {
+      _pendingNavPath = path;
+    }
+  }
 
   static const _channelId = 'fythaniya_high';
   static const _channelName = 'تنبيهات فى ثانية';
@@ -44,6 +67,7 @@ class NotificationService {
       const InitializationSettings(android: androidInit, iOS: iosInit),
       onDidReceiveNotificationResponse: (resp) {
         debugPrint('[NOTIF] tapped: ${resp.payload}');
+        _routeToRequest(resp.payload);
       },
     );
 
@@ -63,6 +87,13 @@ class NotificationService {
     if (_firebaseReady) {
       FirebaseMessaging.onMessage.listen(_onForegroundMessage);
       FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpenedApp);
+      // Cold-start: if the app was terminated and launched by tapping an FCM,
+      // getInitialMessage() returns the message that opened it.
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) {
+        final id = initial.data['requestId']?.toString();
+        if (id != null) _routeToRequest(id);
+      }
       await _registerFcmToken();
       FirebaseMessaging.instance.onTokenRefresh.listen((t) => _sendTokenToBackend(t));
     }
@@ -99,6 +130,7 @@ class NotificationService {
 
   void _onMessageOpenedApp(RemoteMessage m) {
     debugPrint('[NOTIF] opened from FCM: ${m.data}');
+    _routeToRequest(m.data['requestId']?.toString());
   }
 
   Future<void> show({required String title, required String body, String? payload, int? id}) async {

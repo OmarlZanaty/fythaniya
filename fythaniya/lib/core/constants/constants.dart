@@ -23,6 +23,8 @@ class AppRoutes {
   static const String recharge   = '/recharge';
   static const String bill       = '/bill';
   static const String txList     = '/transactions';
+  static const String myRequests = '/my-requests';
+  static const String requestDetail = '/request'; // base; route is '/request/:id'
   static const String notifs     = '/notifications';
   static const String wallet     = '/wallet';
   static const String walletTopup    = '/wallet/topup';

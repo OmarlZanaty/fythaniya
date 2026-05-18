@@ -71,6 +71,7 @@ class _ProfileState extends State<ProfileScreen> {
         ]),
         const SizedBox(height:D.lg),
         const _Label('الحساب'),
+        _Item(icon:Icons.receipt_long_rounded,label:'طلباتي',onTap:()=>ctx.push(AppRoutes.myRequests)),
         _Item(icon:Icons.edit_rounded,label:S.editProfile,onTap:()=>ctx.push(AppRoutes.editProf)),
         _Item(icon:Icons.lock_outline_rounded,label:S.changePass2,onTap:()=>ctx.push(AppRoutes.changePass)),
         if (_bioAvailable) AppCard(child: SwitchListTile(

@@ -25,6 +25,7 @@ const Map<String, IconData> kHomeIconMap = {
   'rewards':      Icons.stars_rounded,
   'notifications':Icons.notifications_rounded,
   'pay_later':    Icons.payments_rounded,
+  'receipt':      Icons.receipt_long_rounded,
   'shield':       Icons.shield_rounded,
   'gift':         Icons.card_giftcard_rounded,
   'cart':         Icons.shopping_cart_rounded,
@@ -201,6 +202,7 @@ class _HomeContent extends StatelessWidget {
                     if (r=='instapay')       { context.push(AppRoutes.instapay); return; }
                     if (r=='bank_transfer')  { context.push(AppRoutes.bankTransfer); return; }
                     if(r=='recharge') context.push(AppRoutes.recharge);
+                    else if(r=='my_requests') context.push(AppRoutes.myRequests);
                     else if(r=='wallet') context.push(AppRoutes.wallet);
                     else if(r=='rewards') context.push(AppRoutes.rewards);
                     else if(r=='notifs') context.push(AppRoutes.notifs);

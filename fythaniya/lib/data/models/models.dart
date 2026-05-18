@@ -138,17 +138,20 @@ class SubServiceModel {
 class RequestModel {
   final String id, type, status;
   final double amount, fee, totalAmount;
-  final String? accountNumber, phoneNumber, adminNote, externalRef;
+  final double? adminSetAmount;
+  final String? accountNumber, phoneNumber, adminNote, externalRef, proofImageUrl;
   final String? serviceProviderId, subServiceId;
+  final String? billingNumber, billingType, receiverName, bankName, bankAccount, instapayId;
   final ServiceProviderModel? serviceProvider;
   final SubServiceModel? subService;
   final DateTime createdAt;
   final DateTime? completedAt, slaDeadline;
 
   const RequestModel({required this.id, required this.type, required this.status,
-    required this.amount, required this.fee, required this.totalAmount,
-    this.accountNumber, this.phoneNumber, this.adminNote, this.externalRef,
+    required this.amount, required this.fee, required this.totalAmount, this.adminSetAmount,
+    this.accountNumber, this.phoneNumber, this.adminNote, this.externalRef, this.proofImageUrl,
     this.serviceProviderId, this.subServiceId, this.serviceProvider, this.subService,
+    this.billingNumber, this.billingType, this.receiverName, this.bankName, this.bankAccount, this.instapayId,
     required this.createdAt, this.completedAt, this.slaDeadline});
 
   factory RequestModel.fromJson(Map<String,dynamic> j) => RequestModel(
@@ -156,12 +159,20 @@ class RequestModel {
     amount: double.tryParse((j['amount']??'0').toString())??0,
     fee: double.tryParse((j['fee']??'0').toString())??0,
     totalAmount: double.tryParse((j['totalAmount']??'0').toString())??0,
+    adminSetAmount: j['adminSetAmount']!=null ? double.tryParse(j['adminSetAmount'].toString()) : null,
     accountNumber: j['accountNumber'] as String?,
     phoneNumber: j['phoneNumber'] as String?,
     adminNote: j['adminNote'] as String?,
     externalRef: j['externalRef'] as String?,
+    proofImageUrl: j['proofImageUrl'] as String?,
     serviceProviderId: j['serviceProviderId'] as String?,
     subServiceId: j['subServiceId'] as String?,
+    billingNumber: j['billingNumber'] as String?,
+    billingType:   j['billingType'] as String?,
+    receiverName:  j['receiverName'] as String?,
+    bankName:      j['bankName'] as String?,
+    bankAccount:   j['bankAccount'] as String?,
+    instapayId:    j['instapayId'] as String?,
     serviceProvider: j['serviceProvider']!=null?ServiceProviderModel.fromJson(j['serviceProvider'] as Map<String,dynamic>):null,
     subService: j['subService']!=null?SubServiceModel.fromJson(j['subService'] as Map<String,dynamic>):null,
     createdAt: DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now(),
@@ -169,11 +180,12 @@ class RequestModel {
     slaDeadline: j['slaDeadline']!=null?DateTime.tryParse(j['slaDeadline'] as String):null,
   );
 
-  bool get isCompleted => status=='COMPLETED';
-  bool get isPending   => ['PENDING','ASSIGNED','IN_PROGRESS'].contains(status);
-  bool get isFailed    => status=='FAILED';
-  bool get isRefunded  => status=='REFUNDED';
-  String get displayTarget => accountNumber ?? phoneNumber ?? '';
+  bool get isCompleted       => status=='COMPLETED';
+  bool get isPending         => ['PENDING','ASSIGNED','IN_PROGRESS'].contains(status);
+  bool get isAwaitingPayment => status=='AWAITING_PAYMENT';
+  bool get isFailed          => status=='FAILED';
+  bool get isRefunded        => status=='REFUNDED';
+  String get displayTarget => accountNumber ?? phoneNumber ?? billingNumber ?? '';
 }
 
 class TransactionModel {
@@ -210,17 +222,21 @@ class NotificationModel {
   final String id, title, body, channel, priority;
   final bool isRead;
   final String? actionUrl;
+  final Map<String, dynamic>? data;
   final DateTime createdAt;
 
   const NotificationModel({required this.id, required this.title, required this.body,
     required this.channel, required this.priority, required this.isRead,
-    this.actionUrl, required this.createdAt});
+    this.actionUrl, this.data, required this.createdAt});
+
+  String? get requestId => data?['requestId']?.toString();
 
   factory NotificationModel.fromJson(Map<String,dynamic> j) => NotificationModel(
     id: j['id'] as String, title: j['title'] as String, body: j['body'] as String,
     channel: j['channel'] as String, priority: j['priority'] as String,
     isRead: (j['isRead'] as bool?)??false,
     actionUrl: j['actionUrl'] as String?,
+    data: j['data'] is Map ? Map<String,dynamic>.from(j['data'] as Map) : null,
     createdAt: DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now());
 }
 

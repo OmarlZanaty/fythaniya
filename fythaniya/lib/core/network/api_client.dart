@@ -263,6 +263,11 @@ class UserRepo {
     return PagedResult.fromJson(res, RequestModel.fromJson);
   }
 
+  Future<RequestModel> getRequest(String id) async {
+    final res = await _c.get('/user/requests/$id');
+    return RequestModel.fromJson(res['data'] as Map<String,dynamic>);
+  }
+
   Future<Map<String,dynamic>> getNotifications({int page=1, bool? isRead}) async {
     final params = <String,dynamic>{'page':page,'limit':30};
     if (isRead!=null) params['isRead'] = isRead.toString();

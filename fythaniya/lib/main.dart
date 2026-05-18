@@ -47,6 +47,8 @@ class _FythaniyaAppState extends State<FythaniyaApp> {
         SocketService.instance.disconnect();
       }
     });
+    // Expose the router so the NotificationService can navigate on tap.
+    NotificationService.instance.attachRouter((path) => _router.go(path));
     _router = GoRouter(
       initialLocation: AppRoutes.splash,
       refreshListenable: _notifier,
@@ -68,6 +70,8 @@ class _FythaniyaAppState extends State<FythaniyaApp> {
         GoRoute(path: AppRoutes.recharge,   builder: (_,__) => const RechargeScreen()),
         GoRoute(path: AppRoutes.bill,       builder: (_,s)  => BillScreen(category: s.extra is String ? s.extra as String : 'ELECTRICITY')),
         GoRoute(path: AppRoutes.txList,     builder: (_,__) => const TransactionsScreen()),
+        GoRoute(path: AppRoutes.myRequests, builder: (_,__) => const UserRequestsScreen()),
+        GoRoute(path: '${AppRoutes.requestDetail}/:id', builder: (_,s) => UserRequestDetailScreen(requestId: s.pathParameters['id']!)),
         GoRoute(path: AppRoutes.notifs,     builder: (_,__) => const NotificationsScreen()),
         GoRoute(path: AppRoutes.wallet,     builder: (_,__) => const WalletScreen()),
         GoRoute(path: AppRoutes.walletTopup,    builder: (_,__) => const TopUpScreen()),

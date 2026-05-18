@@ -4,7 +4,9 @@ import 'package:fythaniya/core/theme/app_theme.dart';
 import 'package:fythaniya/core/constants/constants.dart';
 import 'package:fythaniya/data/models/models.dart';
 import 'package:fythaniya/presentation/blocs/blocs.dart';
+import 'package:fythaniya/core/network/api_client.dart';
 import 'package:fythaniya/presentation/widgets/common/widgets.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' as intl;
 
 class NotificationsScreen extends StatefulWidget {
@@ -69,7 +71,19 @@ class _NotifTile extends StatelessWidget {
     final (icon, color) = _priorityStyle(notif.priority);
     final dt = _formatTime(notif.createdAt);
 
-    return AppCard(
+    return InkWell(
+      borderRadius: BorderRadius.circular(D.r12),
+      onTap: () async {
+        if (!notif.isRead) {
+          // fire-and-forget mark-read so the badge updates next time the list reloads
+          UserRepo().markNotifRead(notif.id).catchError((_) {});
+        }
+        final rid = notif.requestId;
+        if (rid != null && rid.isNotEmpty && context.mounted) {
+          context.push('${AppRoutes.requestDetail}/$rid');
+        }
+      },
+      child: AppCard(
       color: notif.isRead ? AppColors.surface : AppColors.infoBg.withOpacity(0.5),
       padding: const EdgeInsets.all(D.md),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -93,6 +107,7 @@ class _NotifTile extends StatelessWidget {
           ]),
         ])),
       ]),
+    ),
     );
   }
 

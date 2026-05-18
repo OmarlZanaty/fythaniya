@@ -7,6 +7,7 @@ import 'package:fythaniya/core/constants/constants.dart';
 import 'package:fythaniya/data/models/models.dart';
 import 'package:fythaniya/presentation/blocs/blocs.dart';
 import 'package:fythaniya/presentation/widgets/common/widgets.dart';
+import 'package:fythaniya/presentation/screens/phase2/phase2_screens.dart' show showInsufficientBalanceModal;
 
 class RechargeScreen extends StatefulWidget {
   const RechargeScreen({super.key});
@@ -66,11 +67,22 @@ class _RechargeScreenState extends State<RechargeScreen> {
             SummaryRow(label: S.total, value: '${((double.tryParse(_amount.text) ?? 0) + _fee).toStringAsFixed(2)} ${S.egp}', bold: true, valueColor: AppColors.primary),
           ])),
           const SizedBox(height: D.lg),
-          AppButton(label: 'شحن الآن', isLoading: isSubmitting, onPressed: () {
+          AppButton(label: 'شحن الآن', isLoading: isSubmitting, onPressed: () async {
             if (!_form.currentState!.validate() || _provider == null) return;
+            final amount = double.parse(_amount.text);
+            final total  = amount + _fee;
+            // Gate on wallet balance — redirect to top-up if not enough.
+            final hs = context.read<HomeBloc>().state;
+            final balance = hs is HomeLoaded ? hs.user.walletBalance : 0.0;
+            if (balance < total) {
+              final go = await showInsufficientBalanceModal(context, current: balance, needed: total);
+              if (go && context.mounted) context.push(AppRoutes.walletTopup);
+              return;
+            }
+            if (!context.mounted) return;
             ctx.read<RechargeBloc>().add(RechargeSubmitEvent(
               providerId: _provider!.id, subServiceId: _sub?.id ?? '',
-              phone: _phone.text.trim(), amount: double.parse(_amount.text)));
+              phone: _phone.text.trim(), amount: amount));
           }),
           const SizedBox(height: D.xxl),
         ])));

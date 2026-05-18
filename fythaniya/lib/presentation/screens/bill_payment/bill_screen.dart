@@ -6,6 +6,8 @@ import 'package:fythaniya/core/constants/constants.dart';
 import 'package:fythaniya/data/models/models.dart';
 import 'package:fythaniya/presentation/blocs/blocs.dart';
 import 'package:fythaniya/presentation/widgets/common/widgets.dart';
+import 'package:fythaniya/presentation/screens/phase2/phase2_screens.dart' show showInsufficientBalanceModal;
+import 'package:go_router/go_router.dart';
 
 class BillScreen extends StatefulWidget {
   final String category;
@@ -49,10 +51,21 @@ class _BillScreenState extends State<BillScreen> {
     _customCtrl.text = a.toString();
   });
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_provider == null) { _showError('اختر مزود الخدمة'); return; }
     if (_amount == null || _amount! <= 0) { _showError('أدخل المبلغ'); return; }
+    // Gate on wallet balance — redirect to top-up if not enough.
+    final fee = _subService?.feeFor(_amount!) ?? 0;
+    final total = _amount! + fee;
+    final hs = context.read<HomeBloc>().state;
+    final balance = hs is HomeLoaded ? hs.user.walletBalance : 0.0;
+    if (balance < total) {
+      final go = await showInsufficientBalanceModal(context, current: balance, needed: total);
+      if (go && mounted) context.push(AppRoutes.walletTopup);
+      return;
+    }
+    if (!mounted) return;
     context.read<BillBloc>().add(BillSubmitEvent(
       providerId: _provider!.id,
       subServiceId: _subService?.id ?? '',

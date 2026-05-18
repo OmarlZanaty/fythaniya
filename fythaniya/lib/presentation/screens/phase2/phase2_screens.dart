@@ -87,8 +87,11 @@ class Phase2Repo {
 // REUSABLE — Payment numbers display (tap to copy)
 // ════════════════════════════════════════════════════════
 class PaymentNumbersBlock extends StatefulWidget {
-  final String type; // 'WALLET' | 'INSTAPAY' | 'BANK'
-  const PaymentNumbersBlock({super.key, required this.type});
+  // Pass a type ('WALLET' | 'INSTAPAY' | 'BANK') to filter, or leave null to
+  // show every active payment number (each row shows its type icon + label so
+  // the user can pick the channel they want).
+  final String? type;
+  const PaymentNumbersBlock({super.key, this.type});
   @override State<PaymentNumbersBlock> createState() => _PNBState();
 }
 class _PNBState extends State<PaymentNumbersBlock> {

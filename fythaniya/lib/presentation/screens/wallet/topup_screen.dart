@@ -115,17 +115,12 @@ class _TopUpScreenState extends State<TopUpScreen> {
                 decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
               ),
               const SizedBox(height: D.md),
-              // Admin-managed payment numbers for the selected method.
-              // Maps the UI method to the backend PaymentNumber.type enum:
-              //   BANK_TRANSFER → BANK   |   VODAFONE_CASH → WALLET   |   INSTAPAY → INSTAPAY
+              // Show every active payment number — each row carries its type
+              // icon + label so the user can pick whichever channel matches
+              // the method they chose above (محفظة / InstaPay / بنك).
               Text('حول إلى أحد الأرقام التالية ثم ارفع إثبات الدفع', style: TS.cap.copyWith(color: AppColors.textSec)),
               const SizedBox(height: D.sm),
-              PaymentNumbersBlock(
-                key: ValueKey('pn-$_paymentMethod'),
-                type: _paymentMethod == 'BANK_TRANSFER' ? 'BANK'
-                     : _paymentMethod == 'INSTAPAY'      ? 'INSTAPAY'
-                     : 'WALLET',
-              ),
+              const PaymentNumbersBlock(),
               const SizedBox(height: D.md),
               const Divider(),
               const SizedBox(height: D.sm),

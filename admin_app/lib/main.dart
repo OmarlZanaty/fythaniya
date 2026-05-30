@@ -684,7 +684,7 @@ class _ServicesState extends State<ServicesScreen> {
   @override Widget build(BuildContext ctx)=>Scaffold(backgroundColor:AC.bg,
     bottomNavigationBar: const AdminBottomNav(current: 'services'),
     appBar:AppBar(title:const Text('الخدمات'),backgroundColor:AC.primary,
-      actions:[IconButton(icon:const Icon(Icons.add_rounded),onPressed:()=>_showAddProvider(ctx))]),
+      actions:[IconButton(icon:const Icon(Icons.add_rounded),onPressed:()=>_showAddProvider(context))]),
     drawer:const AdminDrawer(),
     body:BlocConsumer<AdminServicesBloc,AdminServicesState>(
       listener:(ctx,s){if(s is AdminServicesError)_showErr(ctx,s.msg);},
@@ -702,7 +702,7 @@ class _ServicesState extends State<ServicesScreen> {
                 Expanded(child: Text(p.displayName, style: AT.bodyM, overflow: TextOverflow.ellipsis)),
                 Transform.scale(scale: 0.85, child: Switch.adaptive(
                   value: p.isActive,
-                  onChanged: (v) => ctx.read<AdminServicesBloc>().add(AdminServicesToggleProviderEvent(p.id, v)),
+                  onChanged: (v) => context.read<AdminServicesBloc>().add(AdminServicesToggleProviderEvent(p.id, v)),
                   activeColor: AC.success,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 )),
@@ -711,9 +711,9 @@ class _ServicesState extends State<ServicesScreen> {
                   icon: const Icon(Icons.more_vert_rounded, size: 20, color: AC.textSec),
                   padding: EdgeInsets.zero,
                   onSelected: (v) {
-                    if (v == 'logo')   _pickProviderLogo(ctx, p.id);
-                    if (v == 'edit')   _showEditProvider(ctx, p);
-                    if (v == 'delete') _confirmDeleteProvider(ctx, p);
+                    if (v == 'logo')   _pickProviderLogo(context, p.id);
+                    if (v == 'edit')   _showEditProvider(context, p);
+                    if (v == 'delete') _confirmDeleteProvider(context, p);
                   },
                   itemBuilder: (_) => [
                     const PopupMenuItem(value: 'logo',   child: ListTile(dense: true, leading: Icon(Icons.add_a_photo_rounded, color: AC.primary), title: Text('تغيير الشعار'))),
@@ -735,9 +735,9 @@ class _ServicesState extends State<ServicesScreen> {
                     icon: const Icon(Icons.more_vert_rounded, size: 20, color: AC.textSec),
                     padding: EdgeInsets.zero,
                     onSelected: (v) {
-                      if (v == 'image')  _pickSubServiceImage(ctx, sub.id);
-                      if (v == 'edit')   _showEditSub(ctx, sub);
-                      if (v == 'delete') _confirmDeleteSub(ctx, sub);
+                      if (v == 'image')  _pickSubServiceImage(context, sub.id);
+                      if (v == 'edit')   _showEditSub(context, sub);
+                      if (v == 'delete') _confirmDeleteSub(context, sub);
                     },
                     itemBuilder: (_) => [
                       const PopupMenuItem(value: 'image',  child: ListTile(dense: true, leading: Icon(Icons.add_a_photo_outlined, color: AC.primary), title: Text('تغيير الصورة'))),
@@ -746,47 +746,59 @@ class _ServicesState extends State<ServicesScreen> {
                     ],
                   ),
                 )),
-                ListTile(leading:const Icon(Icons.add_rounded,color:AC.primary),title:Text('إضافة خدمة فرعية',style:AT.body.copyWith(color:AC.primary)),onTap:()=>_showAddSub(ctx,p.id)),
+                ListTile(leading:const Icon(Icons.add_rounded,color:AC.primary),title:Text('إضافة خدمة فرعية',style:AT.body.copyWith(color:AC.primary)),onTap:()=>_showAddSub(context,p.id)),
               ]));
           });
         }
         return const SizedBox.shrink();
       }));
 
-  void _showAddProvider(BuildContext ctx){
-    final _name=TextEditingController(); final _display=TextEditingController(); String _cat='TELECOM';
-    showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('إضافة مزود خدمة'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:_name,decoration:const InputDecoration(labelText:'الاسم الداخلي')),TextField(controller:_display,decoration:const InputDecoration(labelText:'الاسم المعروض')),DropdownButtonFormField<String>(value:_cat,items:['TELECOM','ELECTRICITY','GAS','WATER','INTERNET','INSURANCE','GOVERNMENT'].map((c)=>DropdownMenuItem(value:c,child:Text(c))).toList(),onChanged:(v)=>_cat=v!,decoration:const InputDecoration(labelText:'الفئة'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:() async {
-      final name=_name.text.trim(); final display=_display.text.trim();
-      if(name.isEmpty||display.isEmpty){ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content:Text('الاسم والاسم المعروض مطلوبان')));return;}
-      Navigator.pop(ctx);
-      try {
-        await AdminServicesRepo().createProvider({'name':name,'displayName':display,'category':_cat,'isActive':true});
-        if(ctx.mounted) ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
-      } on AdminApiException catch(e) {
-        if(ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text(e.message),backgroundColor:AC.error));
-      }
-    },child:const Text('إضافة'))])).then((_){_name.dispose();_display.dispose();});
+  Future<void> _showAddProvider(BuildContext ctx) async {
+    final result = await showDialog<Map<String,dynamic>>(
+      context: context,
+      builder: (_) => const _AddProviderDialog(),
+    );
+    if (result == null) return;
+    try {
+      await AdminServicesRepo().createProvider(result);
+      if (!mounted) return;
+      _showOk(context, '✅ تم الإضافة');
+      context.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+    } catch (e) {
+      if (mounted) _showErr(context, e is AdminApiException ? e.message : '$e');
+    }
   }
 
   Future<void> _showEditSub(BuildContext ctx, SubService sub) async {
     final result = await showDialog<Map<String,dynamic>>(
-      context: ctx,
+      context: context,
       builder: (_) => _EditSubServiceDialog(sub: sub),
     );
     if (result == null) return;
     try {
       await AdminServicesRepo().updateSubService(sub.id, result);
-      if (!ctx.mounted) return;
-      _showOk(ctx, '✅ تم التعديل');
-      ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
-    } on AdminApiException catch (e) {
-      if (ctx.mounted) _showErr(ctx, e.message);
+      if (!mounted) return;
+      _showOk(context, '✅ تم التعديل');
+      context.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+    } catch (e) {
+      if (mounted) _showErr(context, e is AdminApiException ? e.message : '$e');
     }
   }
 
-  void _showAddSub(BuildContext ctx,String providerId){
-    final _name=TextEditingController(); final _nameAr=TextEditingController(); final _fixed=TextEditingController(text:'1.5'); final _pct=TextEditingController(text:'0'); String _cat='TELECOM';
-    showDialog(context:ctx,builder:(_)=>AlertDialog(title:const Text('إضافة خدمة فرعية'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:_name,decoration:const InputDecoration(labelText:'الاسم بالإنجليزية')),TextField(controller:_nameAr,decoration:const InputDecoration(labelText:'الاسم بالعربية')),TextField(controller:_fixed,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الرسوم الثابتة (ج.م)')),TextField(controller:_pct,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'النسبة المئوية (%)'))])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),TextButton(onPressed:(){if(_name.text.isEmpty||_nameAr.text.isEmpty)return;Navigator.pop(ctx);AdminServicesRepo().createSubService(providerId,{'name':_name.text,'nameAr':_nameAr.text,'category':_cat,'fixedFee':double.tryParse(_fixed.text)??0,'percentageFee':(double.tryParse(_pct.text)??0)/100}).then((_)=>ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent()));},child:const Text('إضافة'))])).then((_){_name.dispose();_nameAr.dispose();_fixed.dispose();_pct.dispose();});
+  Future<void> _showAddSub(BuildContext ctx, String providerId) async {
+    final result = await showDialog<Map<String,dynamic>>(
+      context: context,
+      builder: (_) => _AddSubServiceDialog(providerId: providerId),
+    );
+    if (result == null) return;
+    try {
+      await AdminServicesRepo().createSubService(providerId, result);
+      if (!mounted) return;
+      _showOk(context, '✅ تم الإضافة');
+      context.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+    } catch (e) {
+      if (mounted) _showErr(context, e is AdminApiException ? e.message : '$e');
+    }
   }
 
   Future<void> _pickProviderLogo(BuildContext ctx, String providerId) async {
@@ -837,59 +849,59 @@ class _ServicesState extends State<ServicesScreen> {
   // Edit a provider's displayName + category. Uses a stateful dialog to safely own controllers.
   Future<void> _showEditProvider(BuildContext ctx, ServiceProvider p) async {
     final result = await showDialog<Map<String,dynamic>>(
-      context: ctx,
+      context: context,
       builder: (_) => _EditProviderDialog(provider: p),
     );
     if (result == null) return;
     try {
       await AdminServicesRepo().updateProvider(p.id, result);
-      if (!ctx.mounted) return;
-      _showOk(ctx, '✅ تم التعديل');
-      ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
-    } on AdminApiException catch (e) {
-      if (ctx.mounted) _showErr(ctx, e.message);
+      if (!mounted) return;
+      _showOk(context, '✅ تم التعديل');
+      context.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+    } catch (e) {
+      if (mounted) _showErr(context, e is AdminApiException ? e.message : '$e');
     }
   }
 
   // Hard delete (deactivate) a provider with confirm.
   Future<void> _confirmDeleteProvider(BuildContext ctx, ServiceProvider p) async {
-    final ok = await showDialog<bool>(context: ctx, builder: (_) => AlertDialog(
+    final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
       title: const Text('حذف المزود'),
       content: Text('سيتم إخفاء "${p.displayName}" وكل خدماته الفرعية من العملاء. متأكد؟'),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حذف', style: TextStyle(color: AC.error))),
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+        TextButton(onPressed: () => Navigator.pop(context, true),  child: const Text('حذف', style: TextStyle(color: AC.error))),
       ],
     ));
     if (ok != true) return;
     try {
       await AdminServicesRepo().deleteProvider(p.id);
-      if (!ctx.mounted) return;
-      _showOk(ctx, 'تم الحذف');
-      ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
-    } on AdminApiException catch (e) {
-      if (ctx.mounted) _showErr(ctx, e.message);
+      if (!mounted) return;
+      _showOk(context, 'تم الحذف');
+      context.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+    } catch (e) {
+      if (mounted) _showErr(context, e is AdminApiException ? e.message : '$e');
     }
   }
 
   // Hard delete (deactivate) a sub-service with confirm.
   Future<void> _confirmDeleteSub(BuildContext ctx, SubService sub) async {
-    final ok = await showDialog<bool>(context: ctx, builder: (_) => AlertDialog(
+    final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
       title: const Text('حذف الخدمة الفرعية'),
       content: Text('سيتم إخفاء "${sub.nameAr}" من العملاء. متأكد؟'),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حذف', style: TextStyle(color: AC.error))),
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+        TextButton(onPressed: () => Navigator.pop(context, true),  child: const Text('حذف', style: TextStyle(color: AC.error))),
       ],
     ));
     if (ok != true) return;
     try {
       await AdminServicesRepo().deleteSubService(sub.id);
-      if (!ctx.mounted) return;
-      _showOk(ctx, 'تم الحذف');
-      ctx.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
-    } on AdminApiException catch (e) {
-      if (ctx.mounted) _showErr(ctx, e.message);
+      if (!mounted) return;
+      _showOk(context, 'تم الحذف');
+      context.read<AdminServicesBloc>().add(AdminServicesLoadEvent());
+    } catch (e) {
+      if (mounted) _showErr(context, e is AdminApiException ? e.message : '$e');
     }
   }
 }
@@ -1308,6 +1320,98 @@ class _SetAmountDialogState extends State<_SetAmountDialog> {
         }
         Navigator.pop(ctx, v);
       }, child: const Text('تأكيد')),
+    ],
+  );
+}
+
+// ════════════════════════════════════════════════════════
+//  ADD PROVIDER / ADD SUB-SERVICE — Stateful dialogs (own controllers)
+// ════════════════════════════════════════════════════════
+class _AddProviderDialog extends StatefulWidget {
+  const _AddProviderDialog();
+  @override State<_AddProviderDialog> createState() => _AddProviderDialogState();
+}
+class _AddProviderDialogState extends State<_AddProviderDialog> {
+  final _name    = TextEditingController();
+  final _display = TextEditingController();
+  String _cat = 'TELECOM';
+  static const _cats = ['TELECOM','ELECTRICITY','GAS','WATER','INTERNET','INSURANCE','GOVERNMENT'];
+  @override void dispose() { _name.dispose(); _display.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext ctx) => AlertDialog(
+    title: const Text('إضافة مزود خدمة'),
+    content: Column(mainAxisSize: MainAxisSize.min, children: [
+      TextField(controller: _name,    decoration: const InputDecoration(labelText: 'الاسم الداخلي', border: OutlineInputBorder())),
+      const SizedBox(height: 10),
+      TextField(controller: _display, decoration: const InputDecoration(labelText: 'الاسم المعروض', border: OutlineInputBorder())),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<String>(
+        value: _cat,
+        decoration: const InputDecoration(labelText: 'الفئة', border: OutlineInputBorder()),
+        items: _cats.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+        onChanged: (v) => setState(() => _cat = v ?? _cat),
+      ),
+    ]),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+      TextButton(onPressed: () {
+        if (_name.text.trim().isEmpty || _display.text.trim().isEmpty) {
+          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('الاسم والاسم المعروض مطلوبان'), backgroundColor: AC.error));
+          return;
+        }
+        Navigator.pop(ctx, <String,dynamic>{'name': _name.text.trim(), 'displayName': _display.text.trim(), 'category': _cat, 'isActive': true});
+      }, child: const Text('إضافة')),
+    ],
+  );
+}
+
+class _AddSubServiceDialog extends StatefulWidget {
+  final String providerId;
+  const _AddSubServiceDialog({required this.providerId});
+  @override State<_AddSubServiceDialog> createState() => _AddSubServiceDialogState();
+}
+class _AddSubServiceDialogState extends State<_AddSubServiceDialog> {
+  final _name   = TextEditingController();
+  final _nameAr = TextEditingController();
+  final _fixed  = TextEditingController(text: '1.5');
+  final _pct    = TextEditingController(text: '0');
+  String _cat = 'TELECOM';
+  static const _cats = ['TELECOM','ELECTRICITY','GAS','WATER','INTERNET','INSURANCE','GOVERNMENT'];
+  @override void dispose() { _name.dispose(); _nameAr.dispose(); _fixed.dispose(); _pct.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext ctx) => AlertDialog(
+    title: const Text('إضافة خدمة فرعية'),
+    content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      TextField(controller: _name,   decoration: const InputDecoration(labelText: 'الاسم بالإنجليزية', border: OutlineInputBorder())),
+      const SizedBox(height: 10),
+      TextField(controller: _nameAr, decoration: const InputDecoration(labelText: 'الاسم بالعربية', border: OutlineInputBorder())),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<String>(
+        value: _cat,
+        decoration: const InputDecoration(labelText: 'الفئة', border: OutlineInputBorder()),
+        items: _cats.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+        onChanged: (v) => setState(() => _cat = v ?? _cat),
+      ),
+      const SizedBox(height: 10),
+      TextField(controller: _fixed, keyboardType: TextInputType.number,
+        decoration: const InputDecoration(labelText: 'الرسوم الثابتة (ج.م)', border: OutlineInputBorder())),
+      const SizedBox(height: 10),
+      TextField(controller: _pct,   keyboardType: TextInputType.number,
+        decoration: const InputDecoration(labelText: 'النسبة المئوية (%)', border: OutlineInputBorder())),
+    ])),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+      TextButton(onPressed: () {
+        if (_name.text.trim().isEmpty || _nameAr.text.trim().isEmpty) {
+          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('الاسمان مطلوبان'), backgroundColor: AC.error));
+          return;
+        }
+        Navigator.pop(ctx, <String,dynamic>{
+          'name': _name.text.trim(), 'nameAr': _nameAr.text.trim(), 'category': _cat,
+          'fixedFee': double.tryParse(_fixed.text) ?? 0,
+          'percentageFee': (double.tryParse(_pct.text) ?? 0) / 100,
+        });
+      }, child: const Text('إضافة')),
     ],
   );
 }

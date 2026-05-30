@@ -102,10 +102,16 @@ class AdminServicesRepo {
   Future<List<ServiceProvider>> getProviders()async{final res=await _c.get('/services/admin/providers');return(res['data'] as List<dynamic>).map((e)=>ServiceProvider.fromJson(e as Map<String,dynamic>)).toList();}
   Future<void> createProvider(Map<String,dynamic> data)=>_c.post('/services/admin/providers',body:data);
   Future<void> updateProvider(String id,Map<String,dynamic> data)=>_c.put('/services/admin/providers/$id',body:data);
-  Future<void> deleteProvider(String id)=>_c.put('/services/admin/providers/$id',body:{'isActive':false});
+  Future<void> deleteProvider(String id) async {
+    try { await AdminApiClient.instance._dio.delete('/services/admin/providers/$id'); }
+    on DioException catch(e) { throw AdminApiException.fromDio(e); }
+  }
   Future<void> createSubService(String providerId,Map<String,dynamic> data)=>_c.post('/services/admin/providers/$providerId/sub-services',body:data);
   Future<void> updateSubService(String id,Map<String,dynamic> data)=>_c.put('/services/admin/sub-services/$id',body:data);
-  Future<void> deleteSubService(String id)=>_c.put('/services/admin/sub-services/$id',body:{'isActive':false});
+  Future<void> deleteSubService(String id) async {
+    try { await AdminApiClient.instance._dio.delete('/services/admin/sub-services/$id'); }
+    on DioException catch(e) { throw AdminApiException.fromDio(e); }
+  }
 
   // Multipart image upload — returns the public image URL stored on the entity.
   Future<String> uploadProviderLogo(String id, String filePath) async {

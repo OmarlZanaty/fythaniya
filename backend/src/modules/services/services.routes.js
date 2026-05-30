@@ -75,7 +75,7 @@ router.get('/admin/providers', authenticateAdmin, async (req, res, next) => {
 router.post('/admin/providers', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
   [
     body('name').notEmpty(), body('displayName').notEmpty(),
-    body('category').isIn(['TELECOM','ELECTRICITY','GAS','WATER','INTERNET','INSURANCE','GOVERNMENT']),
+    body('category').notEmpty().isLength({ max: 50 }),
     body('commissionRate').optional().isFloat({ min: 0, max: 1 }),
   ], validate,
   async (req, res, next) => {
@@ -112,12 +112,14 @@ router.put('/admin/providers/:id', authenticateAdmin, requireRole('SUPER_ADMIN',
   }
 );
 
-// DELETE /services/admin/providers/:id
+// DELETE /services/admin/providers/:id — hard delete (cascade removes sub-services)
 router.delete('/admin/providers/:id', authenticateAdmin, requireRole('SUPER_ADMIN'),
   async (req, res, next) => {
     try {
-      await prisma.serviceProvider.update({ where: { id: req.params.id }, data: { isActive: false } });
-      return apiResponse.success(res, null, 'Provider deactivated');
+      // Delete sub-services first to avoid FK constraint errors
+      await prisma.subService.deleteMany({ where: { serviceProviderId: req.params.id } });
+      await prisma.serviceProvider.delete({ where: { id: req.params.id } });
+      return apiResponse.success(res, null, 'Provider deleted');
     } catch (err) { next(err); }
   }
 );
@@ -177,12 +179,12 @@ router.put('/admin/sub-services/:id', authenticateAdmin, requireRole('SUPER_ADMI
   }
 );
 
-// DELETE /services/admin/sub-services/:id
+// DELETE /services/admin/sub-services/:id — hard delete
 router.delete('/admin/sub-services/:id', authenticateAdmin, requireRole('SUPER_ADMIN'),
   async (req, res, next) => {
     try {
-      await prisma.subService.update({ where: { id: req.params.id }, data: { isActive: false } });
-      return apiResponse.success(res, null, 'Sub-service deactivated');
+      await prisma.subService.delete({ where: { id: req.params.id } });
+      return apiResponse.success(res, null, 'Sub-service deleted');
     } catch (err) { next(err); }
   }
 );

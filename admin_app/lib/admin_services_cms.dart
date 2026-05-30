@@ -1,7 +1,8 @@
-/// Admin Services CMS — three-level drill-down:
-/// Level 1: Category grid (mirrors user home screen)
-/// Level 2: Providers inside a category
-/// Level 3: Sub-services inside a provider (with fee slider + mode toggle)
+/// Admin Services CMS — mirrors user home screen exactly:
+/// Level 1: Same grid as user home (home tiles from /admin/home-tiles)
+///          Tap tile → Level 2. Long-press → edit tile appearance.
+/// Level 2: Providers inside that service category
+/// Level 3: Sub-services of a provider (fee slider + AMOUNT/REQUEST toggle)
 library;
 
 import 'package:flutter/material.dart';
@@ -58,68 +59,62 @@ class AdminServicesCmsScreen extends StatefulWidget {
 }
 
 class _CmsState extends State<AdminServicesCmsScreen> {
-  List<Map<String, dynamic>> _cats = [];
+  // Level 1 now shows the SAME home tiles as the user home screen (from /admin/home-tiles).
+  List<Map<String, dynamic>> _tiles = [];
   bool _loading = true;
   bool _editMode = false;
 
   @override void initState() { super.initState(); _load(); }
 
-  // Default categories seeded on first run (mirrors the old enum values + icons/colors)
-  static const _defaults = [
-    {'key':'TELECOM',     'nameAr':'اتصالات',   'iconKey':'smartphone','colorHex':'#9333EA','sortOrder':0},
-    {'key':'ELECTRICITY', 'nameAr':'كهرباء',    'iconKey':'bolt',      'colorHex':'#F59E0B','sortOrder':1},
-    {'key':'GAS',         'nameAr':'غاز',       'iconKey':'gas',       'colorHex':'#EF4444','sortOrder':2},
-    {'key':'WATER',       'nameAr':'مياه',      'iconKey':'water',     'colorHex':'#0EA5E9','sortOrder':3},
-    {'key':'INTERNET',    'nameAr':'إنترنت',    'iconKey':'wifi',      'colorHex':'#10B981','sortOrder':4},
-    {'key':'INSURANCE',   'nameAr':'تأمين',     'iconKey':'insurance', 'colorHex':'#6366F1','sortOrder':5},
-    {'key':'GOVERNMENT',  'nameAr':'حكومي',     'iconKey':'gov',       'colorHex':'#64748B','sortOrder':6},
-    {'key':'INSTAPAY',    'nameAr':'InstaPay',   'iconKey':'instapay',  'colorHex':'#3B82F6','sortOrder':7},
-    {'key':'BANK',        'nameAr':'تحويل بنكي','iconKey':'bank',      'colorHex':'#7C3AED','sortOrder':8},
-  ];
-
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      var cats = await AdminCategoriesRepo().list();
-      // Auto-seed defaults on first run
-      if (cats.isEmpty) {
-        for (final d in _defaults) {
-          try { await AdminCategoriesRepo().create(Map<String,dynamic>.from(d)); } catch (_) {}
-        }
-        cats = await AdminCategoriesRepo().list();
-      }
-      if (mounted) setState(() { _cats = cats; _loading = false; });
+      final tiles = await AdminHomeTilesRepo().list();
+      if (mounted) setState(() { _tiles = tiles; _loading = false; });
     } catch (e) { if (mounted) { setState(() => _loading = false); _err(context, '$e'); } }
   }
 
-  Future<void> _addCategory() async {
+  Future<void> _addTile() async {
     final result = await showDialog<Map<String, dynamic>>(
-      context: context, builder: (_) => const _CatFormDialog());
+      context: context, builder: (_) => _TileFormDialog(nextOrder: _tiles.length));
     if (result == null) return;
-    try { await AdminCategoriesRepo().create(result); _load(); _ok(context, '✅ تم إضافة التصنيف'); }
+    try { await AdminHomeTilesRepo().create(result); _load(); _ok(context, '✅ تم إضافة الأيقونة'); }
     catch (e) { if (mounted) _err(context, '$e'); }
   }
 
-  Future<void> _editCategory(Map<String, dynamic> cat) async {
+  Future<void> _editTile(Map<String, dynamic> tile) async {
     final result = await showDialog<Map<String, dynamic>>(
-      context: context, builder: (_) => _CatFormDialog(existing: cat));
+      context: context, builder: (_) => _TileFormDialog(existing: tile, nextOrder: _tiles.length));
     if (result == null) return;
-    try { await AdminCategoriesRepo().update(cat['key'] as String, result); _load(); _ok(context, '✅ تم التعديل'); }
+    try { await AdminHomeTilesRepo().update(tile['id'] as String, result); _load(); _ok(context, '✅ تم التعديل'); }
     catch (e) { if (mounted) _err(context, '$e'); }
   }
 
-  Future<void> _deleteCategory(Map<String, dynamic> cat) async {
+  Future<void> _deleteTile(Map<String, dynamic> tile) async {
     final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
-      title: const Text('حذف التصنيف'),
-      content: Text('حذف "${cat['nameAr']}"؟'),
+      title: const Text('حذف الأيقونة'),
+      content: Text('حذف "${tile['label']}"؟'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
         TextButton(onPressed: () => Navigator.pop(context, true),  child: const Text('حذف', style: TextStyle(color: AC.error))),
       ],
     ));
     if (ok != true) return;
-    try { await AdminCategoriesRepo().delete(cat['key'] as String); _load(); _ok(context, 'تم الحذف'); }
+    try { await AdminHomeTilesRepo().delete(tile['id'] as String); _load(); _ok(context, 'تم الحذف'); }
     catch (e) { if (mounted) _err(context, '$e'); }
+  }
+
+  // Tap a tile → manage the providers/sub-services for its category.
+  void _openTile(Map<String, dynamic> tile) {
+    final cat = (tile['category'] as String?)?.trim();
+    if (cat == null || cat.isEmpty) {
+      // Tile has no service category (e.g. wallet/rewards) — only its appearance is editable.
+      _editTile(tile);
+      return;
+    }
+    Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryProvidersScreen(
+      category: {'key': cat, 'nameAr': tile['label'], 'colorHex': tile['colorHex'], 'iconKey': tile['iconKey']},
+    )));
   }
 
   @override
@@ -135,90 +130,89 @@ class _CmsState extends State<AdminServicesCmsScreen> {
           tooltip: _editMode ? 'تم' : 'تعديل',
           onPressed: () => setState(() => _editMode = !_editMode),
         ),
-        IconButton(icon: const Icon(Icons.add_rounded), tooltip: 'تصنيف جديد', onPressed: _addCategory),
+        IconButton(icon: const Icon(Icons.add_rounded), tooltip: 'أيقونة جديدة', onPressed: _addTile),
         IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load),
       ],
     ),
     body: _loading
       ? const Center(child: CircularProgressIndicator(color: AC.primary))
-      : _cats.isEmpty
+      : _tiles.isEmpty
         ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.apps_rounded, size: 72, color: AC.textMuted),
             const SizedBox(height: 16),
-            const Text('لا توجد تصنيفات بعد', style: AT.body),
+            const Text('لا توجد أيقونات بعد', style: AT.body),
             const SizedBox(height: 12),
-            ElevatedButton.icon(icon: const Icon(Icons.add_rounded), label: const Text('إضافة تصنيف'), onPressed: _addCategory),
+            ElevatedButton.icon(icon: const Icon(Icons.add_rounded), label: const Text('إضافة أيقونة'), onPressed: _addTile),
           ]))
         : RefreshIndicator(
             color: AC.primary, onRefresh: _load,
             child: Column(children: [
-              if (_editMode)
-                Container(color: AC.warningBg, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(children: [
-                    const Icon(Icons.info_outline_rounded, color: AC.warning, size: 18),
-                    const SizedBox(width: 8),
-                    const Expanded(child: Text('وضع التعديل: اضغط مطولاً لإعادة الترتيب، اضغط لتعديل', style: AT.cap)),
-                    TextButton(onPressed: () => setState(() => _editMode = false), child: const Text('إنهاء')),
-                  ])),
+              Container(color: _editMode ? AC.warningBg : AC.infoBg, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(children: [
+                  Icon(Icons.info_outline_rounded, color: _editMode ? AC.warning : AC.info, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    _editMode ? 'وضع التعديل: اسحب لإعادة الترتيب، عدّل أو احذف' : 'اضغط على أيقونة لإدارة مزوديها وخدماتها',
+                    style: AT.cap)),
+                ])),
               Expanded(child: _editMode
                 ? ReorderableListView.builder(
                     padding: const EdgeInsets.all(AD.md),
-                    itemCount: _cats.length,
-                    onReorder: (old, nw) {
+                    itemCount: _tiles.length,
+                    onReorder: (old, nw) async {
                       if (nw > old) nw -= 1;
-                      setState(() { final it = _cats.removeAt(old); _cats.insert(nw, it); });
-                      for (var i = 0; i < _cats.length; i++) {
-                        AdminCategoriesRepo().update(_cats[i]['key'] as String, {'sortOrder': i}).catchError((_){});
+                      setState(() { final it = _tiles.removeAt(old); _tiles.insert(nw, it); });
+                      final payload = <Map<String,dynamic>>[];
+                      for (var i = 0; i < _tiles.length; i++) {
+                        payload.add({'id': _tiles[i]['id'], 'order': i});
                       }
+                      try { await AdminHomeTilesRepo().reorder(payload); } catch (_) {}
                     },
                     itemBuilder: (_, i) {
-                      final cat = _cats[i];
-                      final color = _hexColor(cat['colorHex'] as String?);
-                      return Card(key: ValueKey(cat['key']), margin: const EdgeInsets.only(bottom: 8),
+                      final t = _tiles[i];
+                      final color = _hexColor(t['colorHex'] as String?);
+                      final active = (t['isActive'] as bool?) ?? true;
+                      return Card(key: ValueKey(t['id']), margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
                           leading: CircleAvatar(backgroundColor: color.withOpacity(0.15),
-                            child: Icon(_icon(cat['iconKey'] as String?), color: color)),
-                          title: Text(cat['nameAr'] ?? '', style: AT.bodyM),
-                          subtitle: Text('${cat['key']}  •  ${cat['colorHex']}', style: AT.cap, textDirection: TextDirection.ltr),
+                            child: Icon(_icon(t['iconKey'] as String?), color: color)),
+                          title: Text(t['label'] ?? '', style: AT.bodyM),
+                          subtitle: Text('${t['category'] ?? t['route'] ?? ''}', style: AT.cap, textDirection: TextDirection.ltr),
                           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                            IconButton(icon: const Icon(Icons.edit_rounded, size: 18, color: AC.primary), onPressed: () => _editCategory(cat)),
-                            IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AC.error), onPressed: () => _deleteCategory(cat)),
+                            Switch.adaptive(value: active, activeColor: AC.success, onChanged: (v) async {
+                              await AdminHomeTilesRepo().update(t['id'] as String, {'isActive': v}); _load();
+                            }),
+                            IconButton(icon: const Icon(Icons.edit_rounded, size: 18, color: AC.primary), onPressed: () => _editTile(t)),
+                            IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AC.error), onPressed: () => _deleteTile(t)),
                             const Icon(Icons.drag_handle_rounded, color: AC.textMuted),
                           ]),
                         ));
                     })
-                // Normal mode: grid like user home screen
+                // Normal mode: grid identical to user home screen
                 : GridView.builder(
                     padding: const EdgeInsets.all(AD.lg),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 4, crossAxisSpacing: 12, mainAxisSpacing: 16, childAspectRatio: 0.8),
-                    itemCount: _cats.length,
+                    itemCount: _tiles.length,
                     itemBuilder: (_, i) {
-                      final cat = _cats[i];
-                      final color = _hexColor(cat['colorHex'] as String?);
-                      final active = (cat['isActive'] as bool?) ?? true;
+                      final t = _tiles[i];
+                      final color = _hexColor(t['colorHex'] as String?);
+                      final active = (t['isActive'] as bool?) ?? true;
                       return GestureDetector(
-                        onTap: () => Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => CategoryProvidersScreen(category: cat))),
-                        onLongPress: () => _editCategory(cat),
+                        onTap: () => _openTile(t),
+                        onLongPress: () => _editTile(t),
                         child: Opacity(opacity: active ? 1.0 : 0.4,
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            Stack(children: [
-                              Container(width: 58, height: 58,
-                                decoration: BoxDecoration(
-                                  color: color.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: color.withOpacity(0.25)),
-                                  boxShadow: [BoxShadow(color: color.withOpacity(0.15), blurRadius: 8, offset: const Offset(0,3))],
-                                ),
-                                child: Icon(_icon(cat['iconKey'] as String?), color: color, size: 28)),
-                              // Edit badge in edit mode
-                              Positioned(top: 0, left: 0, child: Container(width: 14, height: 14,
-                                decoration: const BoxDecoration(color: AC.primary, shape: BoxShape.circle),
-                                child: const Icon(Icons.edit_rounded, size: 9, color: Colors.white))),
-                            ]),
+                            Container(width: 58, height: 58,
+                              decoration: BoxDecoration(
+                                color: color.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: color.withOpacity(0.25)),
+                                boxShadow: [BoxShadow(color: color.withOpacity(0.15), blurRadius: 8, offset: const Offset(0,3))],
+                              ),
+                              child: Icon(_icon(t['iconKey'] as String?), color: color, size: 28)),
                             const SizedBox(height: 6),
-                            Text(cat['nameAr'] ?? '', style: AT.cap.copyWith(fontSize: 10, fontWeight: FontWeight.w600),
+                            Text(t['label'] ?? '', style: AT.cap.copyWith(fontSize: 10, fontWeight: FontWeight.w600),
                               textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
                           ])),
                       );
@@ -527,37 +521,51 @@ class _SubsState extends State<ProviderSubServicesScreen> {
 // ══════════════════════════════════════════════════════════
 //  DIALOGS
 // ══════════════════════════════════════════════════════════
-class _CatFormDialog extends StatefulWidget {
+// Home-tile editor: label, icon, color, route, category, requiresPayLater.
+class _TileFormDialog extends StatefulWidget {
   final Map<String, dynamic>? existing;
-  const _CatFormDialog({this.existing});
-  @override State<_CatFormDialog> createState() => _CatFormDialogState();
+  final int nextOrder;
+  const _TileFormDialog({this.existing, required this.nextOrder});
+  @override State<_TileFormDialog> createState() => _TileFormDialogState();
 }
-class _CatFormDialogState extends State<_CatFormDialog> {
-  final _key    = TextEditingController();
-  final _nameAr = TextEditingController();
-  final _color  = TextEditingController(text: '#3B82F6');
+class _TileFormDialogState extends State<_TileFormDialog> {
+  final _label    = TextEditingController();
+  final _color    = TextEditingController(text: '#3B82F6');
+  final _category = TextEditingController();
   String _iconKey = 'apps';
+  String _route   = 'smart_billing';
+  bool _requiresPayLater = false;
   static const _icons = ['apps','smartphone','phone','bolt','gas','water','wifi','bank','business','wallet','shield','gift','school','medical','globe','gov','insurance','transfer','instapay','receipt'];
+  // Route = what the tile does in the user app
+  static const _routes = {
+    'recharge':'شحن رصيد','bill_telecom':'فاتورة تليفون','bill_elec':'كهرباء','bill_gas':'غاز',
+    'bill_water':'مياه','bill_internet':'إنترنت','smart_billing':'فاتورة ذكية (طلب)',
+    'instapay':'InstaPay','bank_transfer':'تحويل بنكي','b2b':'شركات','vodafone_cash':'فودافون كاش',
+    'pay_later':'الدفع الآجل','wallet':'المحفظة','rewards':'المكافآت','my_requests':'طلباتي','notifs':'الإشعارات',
+  };
   @override void initState() {
     super.initState();
     final e = widget.existing;
-    if (e != null) { _key.text = e['key']?.toString() ?? ''; _nameAr.text = e['nameAr']?.toString() ?? ''; _color.text = e['colorHex']?.toString() ?? '#3B82F6'; _iconKey = e['iconKey']?.toString() ?? 'apps'; }
+    if (e != null) {
+      _label.text    = e['label']?.toString() ?? '';
+      _color.text    = e['colorHex']?.toString() ?? '#3B82F6';
+      _category.text = e['category']?.toString() ?? '';
+      _iconKey = e['iconKey']?.toString() ?? 'apps';
+      _route   = _routes.containsKey(e['route']) ? e['route'] as String : 'smart_billing';
+      _requiresPayLater = (e['requiresPayLater'] as bool?) ?? false;
+    }
   }
-  @override void dispose() { _key.dispose(); _nameAr.dispose(); _color.dispose(); super.dispose(); }
+  @override void dispose() { _label.dispose(); _color.dispose(); _category.dispose(); super.dispose(); }
   @override
   Widget build(BuildContext ctx) => AlertDialog(
-    title: Text(widget.existing == null ? 'تصنيف جديد' : 'تعديل التصنيف'),
-    content: SizedBox(width: 340, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      if (widget.existing == null) ...[
-        TextField(controller: _key, textDirection: TextDirection.ltr,
-          decoration: const InputDecoration(labelText: 'المفتاح بالأحرف الكبيرة (TELECOM)', border: OutlineInputBorder())),
-        const SizedBox(height: 10),
-      ],
-      TextField(controller: _nameAr, decoration: const InputDecoration(labelText: 'الاسم بالعربية', border: OutlineInputBorder())),
+    title: Text(widget.existing == null ? 'أيقونة جديدة' : 'تعديل الأيقونة'),
+    content: SizedBox(width: 360, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      TextField(controller: _label, decoration: const InputDecoration(labelText: 'الاسم الظاهر *', border: OutlineInputBorder())),
       const SizedBox(height: 10),
       DropdownButtonFormField<String>(
         value: _iconKey,
         decoration: const InputDecoration(labelText: 'الأيقونة', border: OutlineInputBorder()),
+        isExpanded: true,
         items: _icons.map((k) => DropdownMenuItem(value: k, child: Row(children: [
           Icon(_icon(k), size: 18, color: AC.primary), const SizedBox(width: 8), Text(k),
         ]))).toList(),
@@ -565,15 +573,42 @@ class _CatFormDialogState extends State<_CatFormDialog> {
       ),
       const SizedBox(height: 10),
       TextField(controller: _color, textDirection: TextDirection.ltr,
-        decoration: const InputDecoration(labelText: 'اللون HEX (مثال: #3B82F6)', border: OutlineInputBorder())),
+        decoration: const InputDecoration(labelText: 'اللون HEX (#3B82F6)', border: OutlineInputBorder())),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<String>(
+        value: _route,
+        decoration: const InputDecoration(labelText: 'الإجراء عند الضغط', border: OutlineInputBorder()),
+        isExpanded: true,
+        items: _routes.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+        onChanged: (v) => setState(() => _route = v ?? _route),
+      ),
+      const SizedBox(height: 10),
+      TextField(controller: _category, textDirection: TextDirection.ltr,
+        decoration: const InputDecoration(labelText: 'مفتاح التصنيف (لربط المزودين) مثل TELECOM', border: OutlineInputBorder(), helperText: 'اتركه فارغاً للأيقونات غير المرتبطة بمزودين')),
+      const SizedBox(height: 6),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('يتطلب الدفع الآجل', style: AT.body),
+        value: _requiresPayLater,
+        onChanged: (v) => setState(() => _requiresPayLater = v),
+        activeColor: AC.primary,
+      ),
     ]))),
     actions: [
       TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
       TextButton(onPressed: () {
-        final k = widget.existing != null ? widget.existing!['key'] as String : _key.text.trim().toUpperCase();
-        if (k.isEmpty || _nameAr.text.trim().isEmpty) { ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('المفتاح والاسم مطلوبان'), backgroundColor: AC.error)); return; }
+        if (_label.text.trim().isEmpty) { ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('الاسم مطلوب'), backgroundColor: AC.error)); return; }
         if (!RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(_color.text.trim())) { ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('صيغة اللون غير صحيحة'), backgroundColor: AC.error)); return; }
-        Navigator.pop(ctx, <String,dynamic>{'key': k, 'nameAr': _nameAr.text.trim(), 'iconKey': _iconKey, 'colorHex': _color.text.trim()});
+        final cat = _category.text.trim().toUpperCase();
+        Navigator.pop(ctx, <String,dynamic>{
+          'label': _label.text.trim(),
+          'iconKey': _iconKey,
+          'colorHex': _color.text.trim(),
+          'route': _route,
+          'category': cat.isEmpty ? null : cat,
+          'requiresPayLater': _requiresPayLater,
+          if (widget.existing == null) 'order': widget.nextOrder,
+        });
       }, child: const Text('حفظ')),
     ],
   );

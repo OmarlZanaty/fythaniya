@@ -64,10 +64,30 @@ class _CmsState extends State<AdminServicesCmsScreen> {
 
   @override void initState() { super.initState(); _load(); }
 
+  // Default categories seeded on first run (mirrors the old enum values + icons/colors)
+  static const _defaults = [
+    {'key':'TELECOM',     'nameAr':'اتصالات',   'iconKey':'smartphone','colorHex':'#9333EA','sortOrder':0},
+    {'key':'ELECTRICITY', 'nameAr':'كهرباء',    'iconKey':'bolt',      'colorHex':'#F59E0B','sortOrder':1},
+    {'key':'GAS',         'nameAr':'غاز',       'iconKey':'gas',       'colorHex':'#EF4444','sortOrder':2},
+    {'key':'WATER',       'nameAr':'مياه',      'iconKey':'water',     'colorHex':'#0EA5E9','sortOrder':3},
+    {'key':'INTERNET',    'nameAr':'إنترنت',    'iconKey':'wifi',      'colorHex':'#10B981','sortOrder':4},
+    {'key':'INSURANCE',   'nameAr':'تأمين',     'iconKey':'insurance', 'colorHex':'#6366F1','sortOrder':5},
+    {'key':'GOVERNMENT',  'nameAr':'حكومي',     'iconKey':'gov',       'colorHex':'#64748B','sortOrder':6},
+    {'key':'INSTAPAY',    'nameAr':'InstaPay',   'iconKey':'instapay',  'colorHex':'#3B82F6','sortOrder':7},
+    {'key':'BANK',        'nameAr':'تحويل بنكي','iconKey':'bank',      'colorHex':'#7C3AED','sortOrder':8},
+  ];
+
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final cats = await AdminCategoriesRepo().list();
+      var cats = await AdminCategoriesRepo().list();
+      // Auto-seed defaults on first run
+      if (cats.isEmpty) {
+        for (final d in _defaults) {
+          try { await AdminCategoriesRepo().create(Map<String,dynamic>.from(d)); } catch (_) {}
+        }
+        cats = await AdminCategoriesRepo().list();
+      }
       if (mounted) setState(() { _cats = cats; _loading = false; });
     } catch (e) { if (mounted) { setState(() => _loading = false); _err(context, '$e'); } }
   }

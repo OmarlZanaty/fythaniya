@@ -1334,13 +1334,14 @@ class _AddProviderDialog extends StatefulWidget {
 class _AddProviderDialogState extends State<_AddProviderDialog> {
   final _name    = TextEditingController();
   final _display = TextEditingController();
+  final _customCat = TextEditingController();
+  static const _cats = ['TELECOM','ELECTRICITY','GAS','WATER','INTERNET','INSURANCE','GOVERNMENT','OTHER'];
   String _cat = 'TELECOM';
-  static const _cats = ['TELECOM','ELECTRICITY','GAS','WATER','INTERNET','INSURANCE','GOVERNMENT'];
-  @override void dispose() { _name.dispose(); _display.dispose(); super.dispose(); }
+  @override void dispose() { _name.dispose(); _display.dispose(); _customCat.dispose(); super.dispose(); }
   @override
   Widget build(BuildContext ctx) => AlertDialog(
     title: const Text('إضافة مزود خدمة'),
-    content: Column(mainAxisSize: MainAxisSize.min, children: [
+    content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
       TextField(controller: _name,    decoration: const InputDecoration(labelText: 'الاسم الداخلي', border: OutlineInputBorder())),
       const SizedBox(height: 10),
       TextField(controller: _display, decoration: const InputDecoration(labelText: 'الاسم المعروض', border: OutlineInputBorder())),
@@ -1348,10 +1349,15 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
       DropdownButtonFormField<String>(
         value: _cat,
         decoration: const InputDecoration(labelText: 'الفئة', border: OutlineInputBorder()),
-        items: _cats.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+        items: _cats.map((c) => DropdownMenuItem(value: c, child: Text(c == 'OTHER' ? 'فئة مخصصة...' : c))).toList(),
         onChanged: (v) => setState(() => _cat = v ?? _cat),
       ),
-    ]),
+      if (_cat == 'OTHER') ...[
+        const SizedBox(height: 10),
+        TextField(controller: _customCat, textDirection: TextDirection.ltr,
+          decoration: const InputDecoration(labelText: 'اسم الفئة المخصصة (بالإنجليزية)', border: OutlineInputBorder())),
+      ],
+    ])),
     actions: [
       TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
       TextButton(onPressed: () {
@@ -1359,7 +1365,12 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
           ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('الاسم والاسم المعروض مطلوبان'), backgroundColor: AC.error));
           return;
         }
-        Navigator.pop(ctx, <String,dynamic>{'name': _name.text.trim(), 'displayName': _display.text.trim(), 'category': _cat, 'isActive': true});
+        final finalCat = _cat == 'OTHER' ? _customCat.text.trim().toUpperCase() : _cat;
+        if (finalCat.isEmpty) {
+          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('أدخل اسم الفئة'), backgroundColor: AC.error));
+          return;
+        }
+        Navigator.pop(ctx, <String,dynamic>{'name': _name.text.trim(), 'displayName': _display.text.trim(), 'category': finalCat, 'isActive': true});
       }, child: const Text('إضافة')),
     ],
   );
@@ -1371,13 +1382,14 @@ class _AddSubServiceDialog extends StatefulWidget {
   @override State<_AddSubServiceDialog> createState() => _AddSubServiceDialogState();
 }
 class _AddSubServiceDialogState extends State<_AddSubServiceDialog> {
-  final _name   = TextEditingController();
-  final _nameAr = TextEditingController();
-  final _fixed  = TextEditingController(text: '1.5');
-  final _pct    = TextEditingController(text: '0');
+  final _name      = TextEditingController();
+  final _nameAr    = TextEditingController();
+  final _fixed     = TextEditingController(text: '1.5');
+  final _pct       = TextEditingController(text: '0');
+  final _customCat = TextEditingController();
   String _cat = 'TELECOM';
-  static const _cats = ['TELECOM','ELECTRICITY','GAS','WATER','INTERNET','INSURANCE','GOVERNMENT'];
-  @override void dispose() { _name.dispose(); _nameAr.dispose(); _fixed.dispose(); _pct.dispose(); super.dispose(); }
+  static const _cats = ['TELECOM','ELECTRICITY','GAS','WATER','INTERNET','INSURANCE','GOVERNMENT','OTHER'];
+  @override void dispose() { _name.dispose(); _nameAr.dispose(); _fixed.dispose(); _pct.dispose(); _customCat.dispose(); super.dispose(); }
   @override
   Widget build(BuildContext ctx) => AlertDialog(
     title: const Text('إضافة خدمة فرعية'),
@@ -1389,9 +1401,14 @@ class _AddSubServiceDialogState extends State<_AddSubServiceDialog> {
       DropdownButtonFormField<String>(
         value: _cat,
         decoration: const InputDecoration(labelText: 'الفئة', border: OutlineInputBorder()),
-        items: _cats.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+        items: _cats.map((c) => DropdownMenuItem(value: c, child: Text(c == 'OTHER' ? 'فئة مخصصة...' : c))).toList(),
         onChanged: (v) => setState(() => _cat = v ?? _cat),
       ),
+      if (_cat == 'OTHER') ...[
+        const SizedBox(height: 10),
+        TextField(controller: _customCat, textDirection: TextDirection.ltr,
+          decoration: const InputDecoration(labelText: 'اسم الفئة المخصصة', border: OutlineInputBorder())),
+      ],
       const SizedBox(height: 10),
       TextField(controller: _fixed, keyboardType: TextInputType.number,
         decoration: const InputDecoration(labelText: 'الرسوم الثابتة (ج.م)', border: OutlineInputBorder())),
@@ -1406,8 +1423,13 @@ class _AddSubServiceDialogState extends State<_AddSubServiceDialog> {
           ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('الاسمان مطلوبان'), backgroundColor: AC.error));
           return;
         }
+        final finalCat = _cat == 'OTHER' ? _customCat.text.trim().toUpperCase() : _cat;
+        if (finalCat.isEmpty) {
+          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('أدخل اسم الفئة'), backgroundColor: AC.error));
+          return;
+        }
         Navigator.pop(ctx, <String,dynamic>{
-          'name': _name.text.trim(), 'nameAr': _nameAr.text.trim(), 'category': _cat,
+          'name': _name.text.trim(), 'nameAr': _nameAr.text.trim(), 'category': finalCat,
           'fixedFee': double.tryParse(_fixed.text) ?? 0,
           'percentageFee': (double.tryParse(_pct.text) ?? 0) / 100,
         });

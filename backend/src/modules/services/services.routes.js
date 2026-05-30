@@ -128,7 +128,7 @@ router.delete('/admin/providers/:id', authenticateAdmin, requireRole('SUPER_ADMI
 router.post('/admin/providers/:providerId/sub-services', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
   [
     body('name').notEmpty(), body('nameAr').notEmpty(),
-    body('category').isIn(['TELECOM','ELECTRICITY','GAS','WATER','INTERNET','INSURANCE','GOVERNMENT']),
+    body('category').notEmpty().isLength({ max: 50 }),
     body('fixedFee').optional().isFloat({ min: 0 }),
     body('percentageFee').optional().isFloat({ min: 0, max: 1 }),
   ], validate,

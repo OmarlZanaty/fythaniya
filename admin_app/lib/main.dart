@@ -15,6 +15,7 @@ import 'admin_notification_service.dart';
 import 'admin_biometric_service.dart';
 import 'admin_blocs.dart';
 import 'admin_phase2_screens.dart';
+import 'admin_services_cms.dart';
 
 // ════════════════════════════════════════════════════════
 //  MAIN
@@ -68,7 +69,7 @@ class _AdminAppState extends State<AdminApp> {
         GoRoute(path:AdminRoutes.dashboard,builder:(_,__)=>const AdminShell(child:DashboardScreen())),
         GoRoute(path:AdminRoutes.requests, builder:(_,__)=>const AdminShell(child:RequestsScreen())),
         GoRoute(path:'/requests/:id',      builder:(_,s)=>AdminShell(child:RequestDetailScreen(id:s.pathParameters['id']!))),
-        GoRoute(path:AdminRoutes.services, builder:(_,__)=>const AdminShell(child:ServicesScreen())),
+        GoRoute(path:AdminRoutes.services, builder:(_,__)=>const AdminShell(child:AdminServicesCmsScreen())),
         GoRoute(path:AdminRoutes.b2b,      builder:(_,__)=>const AdminShell(child:B2BScreen())),
         GoRoute(path:'/b2b/:id',           builder:(_,s)=>AdminShell(child:B2BDetailScreen(id:s.pathParameters['id']!))),
         GoRoute(path:AdminRoutes.users,    builder:(_,__)=>const AdminShell(child:UsersScreen())),

@@ -355,7 +355,10 @@ class SubService {
   final double fixedFee,percentageFee; final double? minAmount,maxAmount;
   final String? imageUrl;
   final bool requiresPayLater;
-  const SubService({required this.id,required this.serviceProviderId,required this.name,required this.nameAr,required this.category,required this.isActive,required this.fixedFee,required this.percentageFee,this.minAmount,this.maxAmount,this.imageUrl,this.requiresPayLater=false});
+  // AMOUNT = user enters amount + wallet deducted immediately
+  // REQUEST = submit with amount=0, admin sets amount later (smart billing)
+  final String serviceMode;
+  const SubService({required this.id,required this.serviceProviderId,required this.name,required this.nameAr,required this.category,required this.isActive,required this.fixedFee,required this.percentageFee,this.minAmount,this.maxAmount,this.imageUrl,this.requiresPayLater=false,this.serviceMode='AMOUNT'});
   factory SubService.fromJson(Map<String,dynamic> j)=>SubService(
     id:j['id'] as String,serviceProviderId:j['serviceProviderId'] as String,
     name:j['name'] as String,nameAr:j['nameAr'] as String,category:j['category'] as String,
@@ -366,7 +369,9 @@ class SubService {
     maxAmount:j['maxAmount']!=null?double.tryParse(j['maxAmount'].toString()):null,
     imageUrl:j['imageUrl'] as String?,
     requiresPayLater:(j['requiresPayLater'] as bool?)??false,
+    serviceMode:(j['serviceMode'] as String?)?? 'AMOUNT',
   );
+  bool get isRequestMode => serviceMode == 'REQUEST';
 }
 
 class AdminUser {

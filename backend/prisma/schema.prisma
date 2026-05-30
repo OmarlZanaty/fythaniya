@@ -109,6 +109,9 @@ model SubService {
   fixedFee          Decimal         @default(0) @db.Decimal(8, 2)
   percentageFee     Decimal         @default(0) @db.Decimal(5, 4)
   quickAmounts      String?
+  // AMOUNT = user enters amount, deducted from wallet immediately
+  // REQUEST = submit request with amount=0, admin sets amount later (smart-billing)
+  serviceMode       String          @default("AMOUNT")
   isActive          Boolean         @default(true)
   requiresPayLater  Boolean         @default(false)
   sortOrder         Int             @default(0)

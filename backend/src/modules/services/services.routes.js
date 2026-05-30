@@ -136,7 +136,7 @@ router.post('/admin/providers/:providerId/sub-services', authenticateAdmin, requ
   ], validate,
   async (req, res, next) => {
     try {
-      const { name, nameAr, description, category, minAmount, maxAmount, fixedFee, percentageFee, quickAmounts, sortOrder } = req.body;
+      const { name, nameAr, description, category, minAmount, maxAmount, fixedFee, percentageFee, quickAmounts, sortOrder, serviceMode } = req.body;
       const sub = await prisma.subService.create({
         data: {
           serviceProviderId: req.params.providerId,
@@ -145,6 +145,7 @@ router.post('/admin/providers/:providerId/sub-services', authenticateAdmin, requ
           fixedFee: fixedFee || 0, percentageFee: percentageFee || 0,
           quickAmounts: quickAmounts ? JSON.stringify(quickAmounts) : null,
           sortOrder: sortOrder || 0,
+          serviceMode: serviceMode || 'AMOUNT',
         },
       });
       return apiResponse.success(res, sub, 'Sub-service created', 201);
@@ -156,7 +157,7 @@ router.post('/admin/providers/:providerId/sub-services', authenticateAdmin, requ
 router.put('/admin/sub-services/:id', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
   async (req, res, next) => {
     try {
-      const { name, nameAr, description, minAmount, maxAmount, fixedFee, percentageFee, quickAmounts, sortOrder, isActive, requiresPayLater, imageUrl } = req.body;
+      const { name, nameAr, description, minAmount, maxAmount, fixedFee, percentageFee, quickAmounts, sortOrder, isActive, requiresPayLater, imageUrl, serviceMode } = req.body;
       const sub = await prisma.subService.update({
         where: { id: req.params.id },
         data: {
@@ -172,6 +173,7 @@ router.put('/admin/sub-services/:id', authenticateAdmin, requireRole('SUPER_ADMI
           ...(isActive         !== undefined && { isActive }),
           ...(requiresPayLater !== undefined && { requiresPayLater }),
           ...(imageUrl         !== undefined && { imageUrl }),
+          ...(serviceMode      !== undefined && { serviceMode }),
         },
       });
       return apiResponse.success(res, sub, 'Sub-service updated');

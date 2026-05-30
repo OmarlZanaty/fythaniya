@@ -97,6 +97,21 @@ class AdminDashboardRepo {
   Future<Map<String,dynamic>> getAnalytics({int days=30})async{final res=await _c.get('/admin/analytics/overview',params:{'days':days});return res['data'] as Map<String,dynamic>;}
 }
 
+// ── Service Category Config ────────────────────────────────
+class AdminCategoriesRepo {
+  final _c = AdminApiClient.instance;
+  Future<List<Map<String,dynamic>>> list() async {
+    final res = await _c.get('/admin/service-categories');
+    return ((res['data'] as List<dynamic>?) ?? []).cast<Map<String,dynamic>>();
+  }
+  Future<void> create(Map<String,dynamic> body) => _c.post('/admin/service-categories', body: body);
+  Future<void> update(String key, Map<String,dynamic> body) => _c.put('/admin/service-categories/$key', body: body);
+  Future<void> delete(String key) async {
+    try { await AdminApiClient.instance._dio.delete('/admin/service-categories/$key'); }
+    on DioException catch(e) { throw AdminApiException.fromDio(e); }
+  }
+}
+
 class AdminServicesRepo {
   final _c = AdminApiClient.instance;
   Future<List<ServiceProvider>> getProviders()async{final res=await _c.get('/services/admin/providers');return(res['data'] as List<dynamic>).map((e)=>ServiceProvider.fromJson(e as Map<String,dynamic>)).toList();}

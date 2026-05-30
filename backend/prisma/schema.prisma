@@ -62,17 +62,32 @@ model Admin {
   @@map("admins")
 }
 
+// Stores icon, color and Arabic name for each service category key.
+// The category key is a free string (e.g. "TELECOM", "ELECTRICITY", or any custom value).
+model ServiceCategoryConfig {
+  key       String   @id           // e.g. "TELECOM"
+  nameAr    String                 // e.g. "اتصالات"
+  iconKey   String   @default("apps")  // maps to Material icon in client
+  colorHex  String   @default("#3B82F6")
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("service_category_configs")
+}
+
 model ServiceProvider {
-  id             String          @id @default(uuid())
+  id             String   @id @default(uuid())
   name           String
   displayName    String
-  category       ServiceCategory
-  isActive       Boolean         @default(true)
+  category       String   // free string — no longer an enum
+  isActive       Boolean  @default(true)
   logoUrl        String?
-  sortOrder      Int             @default(0)
-  commissionRate Decimal         @default(0) @db.Decimal(5, 4)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  sortOrder      Int      @default(0)
+  commissionRate Decimal  @default(0) @db.Decimal(5, 4)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
   requests       Request[]
   subServices    SubService[]
   transactions   Transaction[]
@@ -82,12 +97,12 @@ model ServiceProvider {
 }
 
 model SubService {
-  id                String          @id @default(uuid())
+  id                String   @id @default(uuid())
   serviceProviderId String
   name              String
   nameAr            String
   description       String?
-  category          ServiceCategory
+  category          String   // free string — no longer an enum
   imageUrl          String?
   minAmount         Decimal?        @db.Decimal(10, 2)
   maxAmount         Decimal?        @db.Decimal(10, 2)
@@ -523,15 +538,8 @@ enum TransactionStatus {
   REFUNDED
 }
 
-enum ServiceCategory {
-  TELECOM
-  ELECTRICITY
-  GAS
-  WATER
-  INTERNET
-  INSURANCE
-  GOVERNMENT
-}
+// ServiceCategory enum removed — category is now a free String on ServiceProvider
+// and SubService, with metadata stored in ServiceCategoryConfig.
 
 enum NotifChannel {
   PUSH

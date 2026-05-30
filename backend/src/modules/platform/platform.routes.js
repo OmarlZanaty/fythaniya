@@ -445,4 +445,73 @@ router.put('/admin/home-tiles/reorder', authenticateAdmin, requireRole('SUPER_AD
   }
 );
 
+// ═══════════════════════════════════════════════════════════
+//  SERVICE CATEGORY CONFIG
+// ═══════════════════════════════════════════════════════════
+// User + Admin: list active categories (sorted by sortOrder)
+router.get('/service-categories', authenticateUser, async (req, res, next) => {
+  try {
+    const items = await prisma.serviceCategoryConfig.findMany({
+      where: { isActive: true }, orderBy: [{ sortOrder: 'asc' }, { key: 'asc' }],
+    });
+    return apiResponse.success(res, items);
+  } catch (err) { next(err); }
+});
+
+// Admin: all categories (including inactive)
+router.get('/admin/service-categories', authenticateAdmin, async (req, res, next) => {
+  try {
+    const items = await prisma.serviceCategoryConfig.findMany({ orderBy: [{ sortOrder: 'asc' }, { key: 'asc' }] });
+    return apiResponse.success(res, items);
+  } catch (err) { next(err); }
+});
+
+// Admin: create category
+router.post('/admin/service-categories', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
+  [
+    body('key').notEmpty().isLength({ max: 50 }).matches(/^[A-Z0-9_]+$/).withMessage('Key must be uppercase letters/numbers/underscores'),
+    body('nameAr').notEmpty().isLength({ max: 60 }),
+    body('iconKey').optional().isLength({ max: 40 }),
+    body('colorHex').optional().matches(/^#[0-9A-Fa-f]{6}$/),
+    body('sortOrder').optional().isInt({ min: 0 }),
+  ], validate, async (req, res, next) => {
+    try {
+      const { key, nameAr, iconKey, colorHex, sortOrder } = req.body;
+      const item = await prisma.serviceCategoryConfig.upsert({
+        where: { key: key.toUpperCase() },
+        create: { key: key.toUpperCase(), nameAr, iconKey: iconKey || 'apps', colorHex: colorHex || '#3B82F6', sortOrder: sortOrder || 0 },
+        update: { nameAr, ...(iconKey && { iconKey }), ...(colorHex && { colorHex }), ...(sortOrder !== undefined && { sortOrder: Number(sortOrder) }) },
+      });
+      return apiResponse.success(res, item, 'Category saved', 201);
+    } catch (err) { next(err); }
+  }
+);
+
+// Admin: update category
+router.put('/admin/service-categories/:key', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
+  async (req, res, next) => {
+    try {
+      const { nameAr, iconKey, colorHex, sortOrder, isActive } = req.body;
+      const data = {};
+      if (nameAr    !== undefined) data.nameAr    = nameAr;
+      if (iconKey   !== undefined) data.iconKey   = iconKey;
+      if (colorHex  !== undefined) data.colorHex  = colorHex;
+      if (sortOrder !== undefined) data.sortOrder = Number(sortOrder);
+      if (isActive  !== undefined) data.isActive  = !!isActive;
+      const item = await prisma.serviceCategoryConfig.update({ where: { key: req.params.key }, data });
+      return apiResponse.success(res, item, 'Category updated');
+    } catch (err) { next(err); }
+  }
+);
+
+// Admin: delete category
+router.delete('/admin/service-categories/:key', authenticateAdmin, requireRole('SUPER_ADMIN'),
+  async (req, res, next) => {
+    try {
+      await prisma.serviceCategoryConfig.delete({ where: { key: req.params.key } });
+      return apiResponse.success(res, null, 'Category deleted');
+    } catch (err) { next(err); }
+  }
+);
+
 module.exports = router;

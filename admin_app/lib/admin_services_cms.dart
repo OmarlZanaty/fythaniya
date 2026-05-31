@@ -114,9 +114,16 @@ class _CmsState extends State<AdminServicesCmsScreen> {
 
   // Tap a tile → manage the providers/sub-services the user sees inside it.
   void _openTile(Map<String, dynamic> tile) {
-    // Prefer explicit category, else derive from route (matches user app behaviour).
-    var cat = (tile['category'] as String?)?.trim();
-    if (cat == null || cat.isEmpty) cat = _routeCategory[tile['route']];
+    final route = tile['route'] as String?;
+    // For known routes, use the SAME category the user app loads (route-based).
+    // This ignores any free-text category accidentally stored on the tile.
+    var cat = _routeCategory[route];
+    // Only fall back to the tile's explicit category if route isn't a known one
+    // AND the stored category looks like a real key (UPPERCASE / ascii).
+    if (cat == null) {
+      final raw = (tile['category'] as String?)?.trim();
+      if (raw != null && raw.isNotEmpty && RegExp(r'^[A-Z0-9_]+$').hasMatch(raw)) cat = raw;
+    }
     if (cat == null || cat.isEmpty) {
       // No provider category (wallet/rewards/notifs…) — only appearance editable.
       _editTile(tile);

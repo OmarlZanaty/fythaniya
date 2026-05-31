@@ -118,7 +118,7 @@ class _HomeContent extends StatelessWidget {
   List<_Svc> _resolve(List<HomeTileModel>? remote) {
     if (remote == null || remote.isEmpty) return _fallbackServices;
     return remote.map((t) => _Svc(t.label, t.category ?? t.route.toUpperCase(),
-      iconFromKey(t.iconKey), colorFromHex(t.colorHex), t.route)).toList();
+      iconFromKey(t.iconKey), colorFromHex(t.colorHex), t.route, providerId: t.providerId)).toList();
   }
 
   @override Widget build(BuildContext context) => RefreshIndicator(
@@ -197,18 +197,20 @@ class _HomeContent extends StatelessWidget {
                       ));
                       return;
                     }
+                    // Tiles linked to a specific provider open only that provider's products.
+                    final pid = s.providerId;
                     if (r=='vodafone_cash') { context.push(AppRoutes.bill, extra:'TELECOM'); return; }
                     if (r=='pay_later')      { context.push(AppRoutes.payLater); return; }
                     if (r=='instapay')       { context.push(AppRoutes.instapay); return; }
                     if (r=='bank_transfer')  { context.push(AppRoutes.bankTransfer); return; }
-                    if(r=='recharge') context.push(AppRoutes.recharge);
+                    if(r=='recharge') context.push(AppRoutes.recharge, extra: pid==null ? null : {'providerId': pid});
                     else if(r=='my_requests') context.push(AppRoutes.myRequests);
                     else if(r=='wallet') context.push(AppRoutes.wallet);
                     else if(r=='rewards') context.push(AppRoutes.rewards);
                     else if(r=='notifs') context.push(AppRoutes.notifs);
                     else if(r=='b2b') context.push(state.user.isB2B?AppRoutes.b2bDash:AppRoutes.b2bApply);
                     // Bills now route to the smart-billing flow (admin sets amount)
-                    else if(r.startsWith('bill_')) context.push(AppRoutes.smartBilling, extra:s.cat);
+                    else if(r.startsWith('bill_')) context.push(AppRoutes.smartBilling, extra: pid==null ? s.cat : {'category': s.cat, 'providerId': pid});
                     else context.push(AppRoutes.bill, extra:s.cat);
                   },child:Opacity(opacity: gated ? 0.4 : 1.0, child: Column(mainAxisSize:MainAxisSize.min,children:[
                     Container(width:56,height:56,decoration:BoxDecoration(color:s.color.withOpacity(0.1),borderRadius:BorderRadius.circular(14),border:Border.all(color:s.color.withOpacity(0.2))),child:Icon(s.icon,color:s.color,size:26)),
@@ -232,7 +234,7 @@ class _HomeContent extends StatelessWidget {
     ]));
 }
 
-class _Svc { final String label,cat,route; final IconData icon; final Color color; const _Svc(this.label,this.cat,this.icon,this.color,this.route); }
+class _Svc { final String label,cat,route; final IconData icon; final Color color; final String? providerId; const _Svc(this.label,this.cat,this.icon,this.color,this.route,{this.providerId}); }
 
 class _HomeShimmer extends StatelessWidget {
   const _HomeShimmer();

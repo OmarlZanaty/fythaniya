@@ -61,6 +61,7 @@ class AdminServicesCmsScreen extends StatefulWidget {
 class _CmsState extends State<AdminServicesCmsScreen> {
   // Level 1 now shows the SAME home tiles as the user home screen (from /admin/home-tiles).
   List<Map<String, dynamic>> _tiles = [];
+  List<ServiceProvider> _providers = []; // for the tile→provider picker + drill-down
   bool _loading = true;
   bool _editMode = false;
 
@@ -70,13 +71,14 @@ class _CmsState extends State<AdminServicesCmsScreen> {
     setState(() => _loading = true);
     try {
       final tiles = await AdminHomeTilesRepo().list();
-      if (mounted) setState(() { _tiles = tiles; _loading = false; });
+      final providers = await AdminServicesRepo().getProviders();
+      if (mounted) setState(() { _tiles = tiles; _providers = providers; _loading = false; });
     } catch (e) { if (mounted) { setState(() => _loading = false); _err(context, '$e'); } }
   }
 
   Future<void> _addTile() async {
     final result = await showDialog<Map<String, dynamic>>(
-      context: context, builder: (_) => _TileFormDialog(nextOrder: _tiles.length));
+      context: context, builder: (_) => _TileFormDialog(nextOrder: _tiles.length, providers: _providers));
     if (result == null) return;
     try { await AdminHomeTilesRepo().create(result); _load(); _ok(context, '✅ تم إضافة الأيقونة'); }
     catch (e) { if (mounted) _err(context, '$e'); }
@@ -84,7 +86,7 @@ class _CmsState extends State<AdminServicesCmsScreen> {
 
   Future<void> _editTile(Map<String, dynamic> tile) async {
     final result = await showDialog<Map<String, dynamic>>(
-      context: context, builder: (_) => _TileFormDialog(existing: tile, nextOrder: _tiles.length));
+      context: context, builder: (_) => _TileFormDialog(existing: tile, nextOrder: _tiles.length, providers: _providers));
     if (result == null) return;
     try { await AdminHomeTilesRepo().update(tile['id'] as String, result); _load(); _ok(context, '✅ تم التعديل'); }
     catch (e) { if (mounted) _err(context, '$e'); }
@@ -114,6 +116,16 @@ class _CmsState extends State<AdminServicesCmsScreen> {
 
   // Tap a tile → manage the providers/sub-services the user sees inside it.
   void _openTile(Map<String, dynamic> tile) {
+    // If the tile is linked to a specific provider, open that provider's products directly.
+    final pid = tile['providerId'] as String?;
+    if (pid != null && pid.isNotEmpty) {
+      final prov = _providers.where((p) => p.id == pid).firstOrNull;
+      if (prov != null) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) =>
+          ProviderSubServicesScreen(provider: prov, catColor: _hexColor(tile['colorHex'] as String?))));
+        return;
+      }
+    }
     final route = tile['route'] as String?;
     // For known routes, use the SAME category the user app loads (route-based).
     // This ignores any free-text category accidentally stored on the tile.
@@ -542,18 +554,18 @@ class _SubsState extends State<ProviderSubServicesScreen> {
 class _TileFormDialog extends StatefulWidget {
   final Map<String, dynamic>? existing;
   final int nextOrder;
-  const _TileFormDialog({this.existing, required this.nextOrder});
+  final List<ServiceProvider> providers;
+  const _TileFormDialog({this.existing, required this.nextOrder, this.providers = const []});
   @override State<_TileFormDialog> createState() => _TileFormDialogState();
 }
 class _TileFormDialogState extends State<_TileFormDialog> {
-  final _label    = TextEditingController();
-  final _color    = TextEditingController(text: '#3B82F6');
-  final _category = TextEditingController();
+  final _label = TextEditingController();
+  final _color = TextEditingController(text: '#3B82F6');
   String _iconKey = 'apps';
-  String _route   = 'smart_billing';
+  String _route   = 'recharge';
+  String? _providerId; // when set, tile opens ONLY this provider's products
   bool _requiresPayLater = false;
   static const _icons = ['apps','smartphone','phone','bolt','gas','water','wifi','bank','business','wallet','shield','gift','school','medical','globe','gov','insurance','transfer','instapay','receipt'];
-  // Route = what the tile does in the user app
   static const _routes = {
     'recharge':'شحن رصيد','bill_telecom':'فاتورة تليفون','bill_elec':'كهرباء','bill_gas':'غاز',
     'bill_water':'مياه','bill_internet':'إنترنت','smart_billing':'فاتورة ذكية (طلب)',
@@ -564,17 +576,20 @@ class _TileFormDialogState extends State<_TileFormDialog> {
     super.initState();
     final e = widget.existing;
     if (e != null) {
-      _label.text    = e['label']?.toString() ?? '';
-      _color.text    = e['colorHex']?.toString() ?? '#3B82F6';
-      _category.text = e['category']?.toString() ?? '';
+      _label.text = e['label']?.toString() ?? '';
+      _color.text = e['colorHex']?.toString() ?? '#3B82F6';
       _iconKey = e['iconKey']?.toString() ?? 'apps';
-      _route   = _routes.containsKey(e['route']) ? e['route'] as String : 'smart_billing';
+      _route   = _routes.containsKey(e['route']) ? e['route'] as String : 'recharge';
+      _providerId = e['providerId'] as String?;
       _requiresPayLater = (e['requiresPayLater'] as bool?) ?? false;
     }
   }
-  @override void dispose() { _label.dispose(); _color.dispose(); _category.dispose(); super.dispose(); }
+  @override void dispose() { _label.dispose(); _color.dispose(); super.dispose(); }
   @override
-  Widget build(BuildContext ctx) => AlertDialog(
+  Widget build(BuildContext ctx) {
+    // Ensure the stored providerId still exists in the list, else null it for the dropdown.
+    final validPid = widget.providers.any((p) => p.id == _providerId) ? _providerId : null;
+    return AlertDialog(
     title: Text(widget.existing == null ? 'أيقونة جديدة' : 'تعديل الأيقونة'),
     content: SizedBox(width: 360, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
       TextField(controller: _label, decoration: const InputDecoration(labelText: 'الاسم الظاهر *', border: OutlineInputBorder())),
@@ -600,8 +615,18 @@ class _TileFormDialogState extends State<_TileFormDialog> {
         onChanged: (v) => setState(() => _route = v ?? _route),
       ),
       const SizedBox(height: 10),
-      TextField(controller: _category, textDirection: TextDirection.ltr,
-        decoration: const InputDecoration(labelText: 'مفتاح التصنيف (لربط المزودين) مثل TELECOM', border: OutlineInputBorder(), helperText: 'اتركه فارغاً للأيقونات غير المرتبطة بمزودين')),
+      // Link to a specific provider → tile shows ONLY that provider's products.
+      DropdownButtonFormField<String?>(
+        value: validPid,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'المزود المرتبط (اختياري)', border: OutlineInputBorder(),
+          helperText: 'اختر مزوداً لعرض منتجاته فقط — اتركه فارغاً لعرض كل المزودين'),
+        items: [
+          const DropdownMenuItem<String?>(value: null, child: Text('— كل المزودين —')),
+          ...widget.providers.map((p) => DropdownMenuItem<String?>(value: p.id, child: Text('${p.displayName} (${p.category})'))),
+        ],
+        onChanged: (v) => setState(() => _providerId = v),
+      ),
       const SizedBox(height: 6),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
@@ -616,19 +641,22 @@ class _TileFormDialogState extends State<_TileFormDialog> {
       TextButton(onPressed: () {
         if (_label.text.trim().isEmpty) { ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('الاسم مطلوب'), backgroundColor: AC.error)); return; }
         if (!RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(_color.text.trim())) { ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('صيغة اللون غير صحيحة'), backgroundColor: AC.error)); return; }
-        final cat = _category.text.trim().toUpperCase();
+        // Derive category from the linked provider (so user-app filtering still works).
+        final prov = widget.providers.where((p) => p.id == _providerId).firstOrNull;
         Navigator.pop(ctx, <String,dynamic>{
           'label': _label.text.trim(),
           'iconKey': _iconKey,
           'colorHex': _color.text.trim(),
           'route': _route,
-          'category': cat.isEmpty ? null : cat,
+          'category': prov?.category,
+          'providerId': _providerId,
           'requiresPayLater': _requiresPayLater,
           if (widget.existing == null) 'order': widget.nextOrder,
         });
       }, child: const Text('حفظ')),
     ],
   );
+  }
 }
 
 class _ProviderFormDialog extends StatefulWidget {

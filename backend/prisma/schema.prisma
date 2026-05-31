@@ -423,6 +423,8 @@ model HomeTile {
   iconKey         String
   colorHex        String   @default("#3B82F6")
   category        String?  // for bill_* tiles → 'ELECTRICITY' / 'GAS' / 'WATER' / etc.
+  // When set, the tile opens ONLY this provider's products (e.g. "شحن اورنج" → Orange only).
+  providerId      String?
   order           Int      @default(0)
   isActive        Boolean  @default(true)
   requiresPayLater Boolean @default(false)

@@ -67,7 +67,7 @@ class _FythaniyaAppState extends State<FythaniyaApp> {
         GoRoute(path: AppRoutes.register,   builder: (_,__) => const RegisterScreen()),
         GoRoute(path: AppRoutes.forgot,     builder: (_,__) => const ForgotScreen()),
         GoRoute(path: AppRoutes.home,       builder: (_,__) => const HomeScreen()),
-        GoRoute(path: AppRoutes.recharge,   builder: (_,__) => const RechargeScreen()),
+        GoRoute(path: AppRoutes.recharge,   builder: (_,s)  => RechargeScreen(providerId: s.extra is Map ? (s.extra as Map)['providerId'] as String? : null)),
         GoRoute(path: AppRoutes.bill,       builder: (_,s)  => BillScreen(category: s.extra is String ? s.extra as String : 'ELECTRICITY')),
         GoRoute(path: AppRoutes.txList,     builder: (_,__) => const TransactionsScreen()),
         GoRoute(path: AppRoutes.myRequests, builder: (_,__) => const UserRequestsScreen()),

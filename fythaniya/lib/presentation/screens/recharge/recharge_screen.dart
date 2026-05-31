@@ -10,7 +10,10 @@ import 'package:fythaniya/presentation/widgets/common/widgets.dart';
 import 'package:fythaniya/presentation/screens/phase2/phase2_screens.dart' show showInsufficientBalanceModal;
 
 class RechargeScreen extends StatefulWidget {
-  const RechargeScreen({super.key});
+  // When set, the screen locks to this single provider and hides the picker —
+  // so a tile like "شحن اورنج" shows ONLY Orange's products.
+  final String? providerId;
+  const RechargeScreen({super.key, this.providerId});
   @override State<RechargeScreen> createState() => _RechargeScreenState();
 }
 class _RechargeScreenState extends State<RechargeScreen> {
@@ -40,11 +43,26 @@ class _RechargeScreenState extends State<RechargeScreen> {
       },
       builder: (ctx, s) {
         if (s is RechargeLoading) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-        final providers = s is RechargeLoaded ? s.providers : <ServiceProviderModel>[];
+        var providers = s is RechargeLoaded ? s.providers : <ServiceProviderModel>[];
+        // Lock to a single provider when the tile specified one.
+        if (widget.providerId != null) {
+          providers = providers.where((p) => p.id == widget.providerId).toList();
+          if (_provider == null && providers.isNotEmpty) {
+            // auto-select after build to avoid setState-in-build
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _provider == null) {
+                setState(() { _provider = providers.first; _sub = providers.first.subServices.isNotEmpty ? providers.first.subServices.first : null; });
+              }
+            });
+          }
+        }
         final isSubmitting = s is RechargeSubmitting;
         return Form(key: _form, child: SingleChildScrollView(padding: const EdgeInsets.all(D.md), child: Column(children: [
-          ProviderSelector(providers: providers, selected: _provider, onSelect: (p) { setState(() { _provider = p; _sub = p.subServices.isNotEmpty ? p.subServices.first : null; }); }),
-          const SizedBox(height: D.md),
+          // Hide the provider picker when locked to one provider.
+          if (widget.providerId == null) ...[
+            ProviderSelector(providers: providers, selected: _provider, onSelect: (p) { setState(() { _provider = p; _sub = p.subServices.isNotEmpty ? p.subServices.first : null; }); }),
+            const SizedBox(height: D.md),
+          ],
           if (_provider != null && _provider!.subServices.length > 1) ...[
             SubServiceSelector(subServices: _provider!.subServices, selected: _sub, onSelect: (s2) => setState(() => _sub = s2)),
             const SizedBox(height: D.md),

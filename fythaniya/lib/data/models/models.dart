@@ -384,11 +384,11 @@ class PagedResult<T> {
 // to Material Icons / Color at render time (see kHomeIconMap / hex parser).
 class HomeTileModel {
   final String id, label, route, iconKey, colorHex;
-  final String? category, badge;
+  final String? category, badge, providerId;
   final int order;
   final bool requiresPayLater;
   const HomeTileModel({required this.id, required this.label, required this.route,
-    required this.iconKey, required this.colorHex, this.category, this.badge,
+    required this.iconKey, required this.colorHex, this.category, this.badge, this.providerId,
     required this.order, required this.requiresPayLater});
   factory HomeTileModel.fromJson(Map<String,dynamic> j) => HomeTileModel(
     id: j['id'] as String,
@@ -398,6 +398,7 @@ class HomeTileModel {
     colorHex: (j['colorHex'] ?? '#3B82F6') as String,
     category: j['category'] as String?,
     badge:    j['badge'] as String?,
+    providerId: j['providerId'] as String?,
     order: (j['order'] as num?)?.toInt() ?? 0,
     requiresPayLater: (j['requiresPayLater'] as bool?) ?? false,
   );

@@ -355,7 +355,7 @@ router.get('/home-tiles', authenticateUser, async (req, res, next) => {
       where: { isActive: true },
       orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
       select: { id: true, label: true, route: true, iconKey: true, colorHex: true,
-        category: true, order: true, requiresPayLater: true, badge: true },
+        category: true, providerId: true, order: true, requiresPayLater: true, badge: true },
     });
     return apiResponse.success(res, items);
   } catch (err) { next(err); }
@@ -383,7 +383,7 @@ router.post('/admin/home-tiles', authenticateAdmin, requireRole('SUPER_ADMIN', '
     body('badge').optional().isLength({ max: 20 }),
   ], validate, async (req, res, next) => {
     try {
-      const { label, route, iconKey, colorHex, category, order, requiresPayLater, badge, isActive } = req.body;
+      const { label, route, iconKey, colorHex, category, providerId, order, requiresPayLater, badge, isActive } = req.body;
       const item = await prisma.homeTile.create({
         data: {
           label: label.toString().trim(),
@@ -391,6 +391,7 @@ router.post('/admin/home-tiles', authenticateAdmin, requireRole('SUPER_ADMIN', '
           iconKey: iconKey.toString().trim(),
           colorHex: (colorHex || '#3B82F6').toString(),
           category: category ? category.toString().trim().toUpperCase() : null,
+          providerId: providerId || null,
           order: order ?? 0,
           requiresPayLater: !!requiresPayLater,
           badge: badge ? badge.toString().trim() : null,
@@ -405,13 +406,14 @@ router.post('/admin/home-tiles', authenticateAdmin, requireRole('SUPER_ADMIN', '
 router.put('/admin/home-tiles/:id', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
   async (req, res, next) => {
     try {
-      const { label, route, iconKey, colorHex, category, order, requiresPayLater, badge, isActive } = req.body;
+      const { label, route, iconKey, colorHex, category, providerId, order, requiresPayLater, badge, isActive } = req.body;
       const data = {};
       if (label    !== undefined) data.label    = label.toString().trim();
       if (route    !== undefined) data.route    = route.toString().trim();
       if (iconKey  !== undefined) data.iconKey  = iconKey.toString().trim();
       if (colorHex !== undefined) data.colorHex = colorHex.toString();
       if (category !== undefined) data.category = category ? category.toString().trim().toUpperCase() : null;
+      if (providerId !== undefined) data.providerId = providerId || null;
       if (order    !== undefined) data.order    = Number(order);
       if (requiresPayLater !== undefined) data.requiresPayLater = !!requiresPayLater;
       if (badge    !== undefined) data.badge    = badge ? badge.toString().trim() : null;

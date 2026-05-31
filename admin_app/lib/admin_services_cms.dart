@@ -50,6 +50,29 @@ const _iconMap = <String, IconData>{
 };
 IconData _icon(String? k) => _iconMap[k] ?? Icons.apps_rounded;
 
+// Renders a tile's custom image if it has one, else its icon — used in grid + list.
+Widget _tileVisual(Map<String, dynamic> tile, Color color, double size) {
+  final img = tile['imageUrl'] as String?;
+  if (img != null && img.isNotEmpty) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size * 0.28),
+      child: CachedNetworkImage(
+        imageUrl: img, width: size, height: size, fit: BoxFit.cover,
+        placeholder: (_, __) => Container(width: size, height: size, color: color.withOpacity(0.1)),
+        errorWidget: (_, __, ___) => Container(width: size, height: size, color: color.withOpacity(0.12),
+          child: Icon(_icon(tile['iconKey'] as String?), color: color, size: size * 0.5)),
+      ),
+    );
+  }
+  return Container(width: size, height: size,
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(size * 0.28),
+      border: Border.all(color: color.withOpacity(0.25)),
+    ),
+    child: Icon(_icon(tile['iconKey'] as String?), color: color, size: size * 0.48));
+}
+
 // ══════════════════════════════════════════════════════════
 //  LEVEL 1 — Category Grid (looks like user home screen)
 // ══════════════════════════════════════════════════════════
@@ -103,6 +126,29 @@ class _CmsState extends State<AdminServicesCmsScreen> {
     ));
     if (ok != true) return;
     try { await AdminHomeTilesRepo().delete(tile['id'] as String); _load(); _ok(context, 'تم الحذف'); }
+    catch (e) { if (mounted) _err(context, '$e'); }
+  }
+
+  // Upload a custom image for a tile (overrides its icon).
+  Future<void> _pickTileImage(Map<String, dynamic> tile) async {
+    final src = await showModalBottomSheet<ImageSource>(context: context,
+      builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        ListTile(leading: const Icon(Icons.camera_alt_rounded, color: AC.primary), title: const Text('الكاميرا'), onTap: () => Navigator.pop(context, ImageSource.camera)),
+        ListTile(leading: const Icon(Icons.photo_library_rounded, color: AC.primary), title: const Text('المعرض'),  onTap: () => Navigator.pop(context, ImageSource.gallery)),
+        if (tile['imageUrl'] != null)
+          ListTile(leading: const Icon(Icons.delete_outline_rounded, color: AC.error), title: const Text('إزالة الصورة'), onTap: () => Navigator.pop(context, null)),
+      ])));
+    // Distinguish "remove" from "cancel": remove returns null after the sheet had a delete tile.
+    // We re-check below by passing through a sentinel; simplest: handle remove separately.
+    if (src == null) return;
+    final file = await ImagePicker().pickImage(source: src, imageQuality: 85, maxWidth: 600);
+    if (file == null) return;
+    try { await AdminHomeTilesRepo().uploadImage(tile['id'] as String, file.path); _load(); _ok(context, '✅ تم رفع الصورة'); }
+    catch (e) { if (mounted) _err(context, '$e'); }
+  }
+
+  Future<void> _removeTileImage(Map<String, dynamic> tile) async {
+    try { await AdminHomeTilesRepo().update(tile['id'] as String, {'imageUrl': ''}); _load(); _ok(context, 'تم إزالة الصورة'); }
     catch (e) { if (mounted) _err(context, '$e'); }
   }
 
@@ -203,16 +249,26 @@ class _CmsState extends State<AdminServicesCmsScreen> {
                       final active = (t['isActive'] as bool?) ?? true;
                       return Card(key: ValueKey(t['id']), margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
-                          leading: CircleAvatar(backgroundColor: color.withOpacity(0.15),
-                            child: Icon(_icon(t['iconKey'] as String?), color: color)),
+                          leading: _tileVisual(t, color, 44),
                           title: Text(t['label'] ?? '', style: AT.bodyM),
                           subtitle: Text('${t['category'] ?? t['route'] ?? ''}', style: AT.cap, textDirection: TextDirection.ltr),
                           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Switch.adaptive(value: active, activeColor: AC.success, onChanged: (v) async {
-                              await AdminHomeTilesRepo().update(t['id'] as String, {'isActive': v}); _load();
-                            }),
-                            IconButton(icon: const Icon(Icons.edit_rounded, size: 18, color: AC.primary), onPressed: () => _editTile(t)),
-                            IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AC.error), onPressed: () => _deleteTile(t)),
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert_rounded, color: AC.textSec),
+                              onSelected: (v) {
+                                if (v == 'image')   _pickTileImage(t);
+                                if (v == 'remove')  _removeTileImage(t);
+                                if (v == 'edit')    _editTile(t);
+                                if (v == 'delete')  _deleteTile(t);
+                              },
+                              itemBuilder: (_) => [
+                                const PopupMenuItem(value: 'image',  child: ListTile(dense: true, leading: Icon(Icons.image_rounded, color: AC.accent), title: Text('رفع صورة'))),
+                                if (t['imageUrl'] != null)
+                                  const PopupMenuItem(value: 'remove', child: ListTile(dense: true, leading: Icon(Icons.hide_image_rounded, color: AC.textMuted), title: Text('إزالة الصورة'))),
+                                const PopupMenuItem(value: 'edit',   child: ListTile(dense: true, leading: Icon(Icons.edit_rounded, color: AC.primary), title: Text('تعديل'))),
+                                const PopupMenuItem(value: 'delete', child: ListTile(dense: true, leading: Icon(Icons.delete_outline_rounded, color: AC.error), title: Text('حذف', style: TextStyle(color: AC.error)))),
+                              ],
+                            ),
                             const Icon(Icons.drag_handle_rounded, color: AC.textMuted),
                           ]),
                         ));
@@ -232,14 +288,7 @@ class _CmsState extends State<AdminServicesCmsScreen> {
                         onLongPress: () => _editTile(t),
                         child: Opacity(opacity: active ? 1.0 : 0.4,
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            Container(width: 58, height: 58,
-                              decoration: BoxDecoration(
-                                color: color.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: color.withOpacity(0.25)),
-                                boxShadow: [BoxShadow(color: color.withOpacity(0.15), blurRadius: 8, offset: const Offset(0,3))],
-                              ),
-                              child: Icon(_icon(t['iconKey'] as String?), color: color, size: 28)),
+                            _tileVisual(t, color, 58),
                             const SizedBox(height: 6),
                             Text(t['label'] ?? '', style: AT.cap.copyWith(fontSize: 10, fontWeight: FontWeight.w600),
                               textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),

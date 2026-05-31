@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fythaniya/core/theme/app_theme.dart';
 import 'package:fythaniya/core/constants/constants.dart';
@@ -118,7 +119,7 @@ class _HomeContent extends StatelessWidget {
   List<_Svc> _resolve(List<HomeTileModel>? remote) {
     if (remote == null || remote.isEmpty) return _fallbackServices;
     return remote.map((t) => _Svc(t.label, t.category ?? t.route.toUpperCase(),
-      iconFromKey(t.iconKey), colorFromHex(t.colorHex), t.route, providerId: t.providerId)).toList();
+      iconFromKey(t.iconKey), colorFromHex(t.colorHex), t.route, providerId: t.providerId, imageUrl: t.imageUrl)).toList();
   }
 
   @override Widget build(BuildContext context) => RefreshIndicator(
@@ -213,7 +214,12 @@ class _HomeContent extends StatelessWidget {
                     else if(r.startsWith('bill_')) context.push(AppRoutes.smartBilling, extra: pid==null ? s.cat : {'category': s.cat, 'providerId': pid});
                     else context.push(AppRoutes.bill, extra:s.cat);
                   },child:Opacity(opacity: gated ? 0.4 : 1.0, child: Column(mainAxisSize:MainAxisSize.min,children:[
-                    Container(width:56,height:56,decoration:BoxDecoration(color:s.color.withOpacity(0.1),borderRadius:BorderRadius.circular(14),border:Border.all(color:s.color.withOpacity(0.2))),child:Icon(s.icon,color:s.color,size:26)),
+                    (s.imageUrl != null && s.imageUrl!.isNotEmpty)
+                      ? ClipRRect(borderRadius: BorderRadius.circular(14),
+                          child: CachedNetworkImage(imageUrl: s.imageUrl!, width: 56, height: 56, fit: BoxFit.cover,
+                            placeholder: (_,__) => Container(width:56,height:56,color:s.color.withOpacity(0.1)),
+                            errorWidget: (_,__,___) => Container(width:56,height:56,decoration:BoxDecoration(color:s.color.withOpacity(0.1),borderRadius:BorderRadius.circular(14)),child:Icon(s.icon,color:s.color,size:26))))
+                      : Container(width:56,height:56,decoration:BoxDecoration(color:s.color.withOpacity(0.1),borderRadius:BorderRadius.circular(14),border:Border.all(color:s.color.withOpacity(0.2))),child:Icon(s.icon,color:s.color,size:26)),
                     const SizedBox(height:5),
                     Text(s.label,style:TS.cap.copyWith(fontSize:10),textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis),
                   ])));
@@ -234,7 +240,7 @@ class _HomeContent extends StatelessWidget {
     ]));
 }
 
-class _Svc { final String label,cat,route; final IconData icon; final Color color; final String? providerId; const _Svc(this.label,this.cat,this.icon,this.color,this.route,{this.providerId}); }
+class _Svc { final String label,cat,route; final IconData icon; final Color color; final String? providerId; final String? imageUrl; const _Svc(this.label,this.cat,this.icon,this.color,this.route,{this.providerId,this.imageUrl}); }
 
 class _HomeShimmer extends StatelessWidget {
   const _HomeShimmer();

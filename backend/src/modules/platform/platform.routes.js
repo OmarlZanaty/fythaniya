@@ -354,7 +354,7 @@ router.get('/home-tiles', authenticateUser, async (req, res, next) => {
     const items = await prisma.homeTile.findMany({
       where: { isActive: true },
       orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
-      select: { id: true, label: true, route: true, iconKey: true, colorHex: true,
+      select: { id: true, label: true, route: true, iconKey: true, imageUrl: true, colorHex: true,
         category: true, providerId: true, order: true, requiresPayLater: true, badge: true },
     });
     return apiResponse.success(res, items);
@@ -390,6 +390,7 @@ router.post('/admin/home-tiles', authenticateAdmin, requireRole('SUPER_ADMIN', '
           route: route.toString().trim(),
           iconKey: iconKey.toString().trim(),
           colorHex: (colorHex || '#3B82F6').toString(),
+          imageUrl: req.body.imageUrl || null,
           category: category ? category.toString().trim().toUpperCase() : null,
           providerId: providerId || null,
           order: order ?? 0,
@@ -412,6 +413,7 @@ router.put('/admin/home-tiles/:id', authenticateAdmin, requireRole('SUPER_ADMIN'
       if (route    !== undefined) data.route    = route.toString().trim();
       if (iconKey  !== undefined) data.iconKey  = iconKey.toString().trim();
       if (colorHex !== undefined) data.colorHex = colorHex.toString();
+      if (req.body.imageUrl !== undefined) data.imageUrl = req.body.imageUrl || null;
       if (category !== undefined) data.category = category ? category.toString().trim().toUpperCase() : null;
       if (providerId !== undefined) data.providerId = providerId || null;
       if (order    !== undefined) data.order    = Number(order);
@@ -443,6 +445,20 @@ router.put('/admin/home-tiles/reorder', authenticateAdmin, requireRole('SUPER_AD
         prisma.homeTile.update({ where: { id: it.id }, data: { order: Number(it.order) } })
       ));
       return apiResponse.success(res, null, 'Reordered');
+    } catch (err) { next(err); }
+  }
+);
+
+// Upload a custom image for a home tile (overrides its iconKey).
+const { makeUploader: _makeTileUploader, publicUrl: _tilePublicUrl } = require('../../middleware/upload');
+const _tileUploader = _makeTileUploader('services', { maxMB: 3 });
+router.post('/admin/home-tiles/:id/image', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
+  _tileUploader.single('image'), async (req, res, next) => {
+    try {
+      if (!req.file) return apiResponse.error(res, 'لم يتم استلام صورة', 400);
+      const url = _tilePublicUrl(req, 'services', req.file.filename);
+      const tile = await prisma.homeTile.update({ where: { id: req.params.id }, data: { imageUrl: url } });
+      return apiResponse.success(res, { imageUrl: url, tile }, 'تم رفع الصورة');
     } catch (err) { next(err); }
   }
 );

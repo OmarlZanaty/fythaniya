@@ -185,6 +185,14 @@ class AdminHomeTilesRepo {
   }
   Future<void> reorder(List<Map<String,dynamic>> items) =>
     _c.put('/admin/home-tiles/reorder', body: {'items': items});
+  Future<String> uploadImage(String id, String filePath) async {
+    final form = FormData.fromMap({
+      'image': await MultipartFile.fromFile(filePath, filename: filePath.split(RegExp(r'[\\/]')).last),
+    });
+    final r = await AdminApiClient.instance._dio.post('/admin/home-tiles/$id/image', data: form);
+    final d = (r.data as Map<String,dynamic>)['data'] as Map<String,dynamic>;
+    return d['imageUrl'] as String;
+  }
 }
 
 // ── Admin Settings ────────────────────────────────────────

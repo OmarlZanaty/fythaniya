@@ -421,6 +421,7 @@ model HomeTile {
   label           String
   route           String
   iconKey         String
+  imageUrl        String?  // optional custom image; overrides iconKey when set
   colorHex        String   @default("#3B82F6")
   category        String?  // for bill_* tiles → 'ELECTRICITY' / 'GAS' / 'WATER' / etc.
   // When set, the tile opens ONLY this provider's products (e.g. "شحن اورنج" → Orange only).

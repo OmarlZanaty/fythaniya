@@ -104,11 +104,21 @@ class _CmsState extends State<AdminServicesCmsScreen> {
     catch (e) { if (mounted) _err(context, '$e'); }
   }
 
-  // Tap a tile → manage the providers/sub-services for its category.
+  // Maps a tile route → the provider category the USER APP loads for that route,
+  // so the admin drill-down shows EXACTLY the same providers the user sees.
+  static const _routeCategory = {
+    'recharge': 'TELECOM', 'bill_telecom': 'TELECOM', 'vodafone_cash': 'TELECOM',
+    'bill_elec': 'ELECTRICITY', 'bill_gas': 'GAS', 'bill_water': 'WATER',
+    'bill_internet': 'INTERNET', 'instapay': 'INSTAPAY', 'bank_transfer': 'BANK',
+  };
+
+  // Tap a tile → manage the providers/sub-services the user sees inside it.
   void _openTile(Map<String, dynamic> tile) {
-    final cat = (tile['category'] as String?)?.trim();
+    // Prefer explicit category, else derive from route (matches user app behaviour).
+    var cat = (tile['category'] as String?)?.trim();
+    if (cat == null || cat.isEmpty) cat = _routeCategory[tile['route']];
     if (cat == null || cat.isEmpty) {
-      // Tile has no service category (e.g. wallet/rewards) — only its appearance is editable.
+      // No provider category (wallet/rewards/notifs…) — only appearance editable.
       _editTile(tile);
       return;
     }

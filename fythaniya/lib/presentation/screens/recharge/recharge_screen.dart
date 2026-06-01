@@ -63,7 +63,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
             ProviderSelector(providers: providers, selected: _provider, onSelect: (p) { setState(() { _provider = p; _sub = p.subServices.isNotEmpty ? p.subServices.first : null; }); }),
             const SizedBox(height: D.md),
           ],
-          if (_provider != null && _provider!.subServices.length > 1) ...[
+          if (_provider != null && _provider!.subServices.isNotEmpty) ...[
             SubServiceSelector(subServices: _provider!.subServices, selected: _sub, onSelect: (s2) => setState(() => _sub = s2)),
             const SizedBox(height: D.md),
           ],

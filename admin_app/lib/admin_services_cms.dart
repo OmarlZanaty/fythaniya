@@ -556,18 +556,23 @@ class _ServicePreviewState extends State<ServicePreviewScreen> {
                 child: Text('${(s.bundlePrice ?? 0).toStringAsFixed(0)} ج.م', style: AT.cap.copyWith(color: AC.info, fontWeight: FontWeight.w700))) ],
           ]),
           const SizedBox(height: 4),
-          Row(children: [
+          Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
             _FeeChip('ثابتة', '${s.fixedFee.toStringAsFixed(1)} ج.م', widget.color),
-            const SizedBox(width: 6),
             _FeeChip('نسبة', '${(s.percentageFee*100).toStringAsFixed(2)}%', widget.color),
-            const SizedBox(width: 6),
             Icon(isBundle ? Icons.inventory_2_rounded : isReq ? Icons.inbox_rounded : Icons.payments_rounded,
               size: 14, color: isBundle ? AC.info : isReq ? AC.warning : AC.success),
           ]),
         ])),
-        IconButton(icon: const Icon(Icons.image_rounded, size: 18, color: AC.accent), tooltip: 'صورة', onPressed: () => _subImage(s)),
-        IconButton(icon: const Icon(Icons.edit_rounded, size: 18, color: AC.primary), onPressed: () => _editSub(s)),
-        IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AC.error), onPressed: () => _deleteSub(s)),
+        // Actions stacked in a popup to keep the row narrow on small screens.
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert_rounded, size: 20, color: AC.textSec),
+          onSelected: (v) { if (v=='image') _subImage(s); if (v=='edit') _editSub(s); if (v=='delete') _deleteSub(s); },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'image',  child: ListTile(dense: true, leading: Icon(Icons.image_rounded, color: AC.accent), title: Text('صورة'))),
+            PopupMenuItem(value: 'edit',   child: ListTile(dense: true, leading: Icon(Icons.edit_rounded, color: AC.primary), title: Text('تعديل'))),
+            PopupMenuItem(value: 'delete', child: ListTile(dense: true, leading: Icon(Icons.delete_outline_rounded, color: AC.error), title: Text('حذف', style: TextStyle(color: AC.error)))),
+          ],
+        ),
       ]),
     );
   }

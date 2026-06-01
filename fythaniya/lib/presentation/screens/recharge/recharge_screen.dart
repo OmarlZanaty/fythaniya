@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:fythaniya/core/theme/app_theme.dart';
 import 'package:fythaniya/core/constants/constants.dart';
 import 'package:fythaniya/data/models/models.dart';
+import 'package:fythaniya/core/network/api_client.dart';
 import 'package:fythaniya/presentation/blocs/blocs.dart';
 import 'package:fythaniya/presentation/widgets/common/widgets.dart';
 import 'package:fythaniya/presentation/screens/phase2/phase2_screens.dart' show showInsufficientBalanceModal;
@@ -22,9 +23,28 @@ class _RechargeScreenState extends State<RechargeScreen> {
   final _amount = TextEditingController();
   ServiceProviderModel? _provider;
   SubServiceModel? _sub;
+  bool _reqSubmitting = false; // for REQUEST-type products
 
   @override void initState() { super.initState(); context.read<RechargeBloc>().add(RechargeInitEvent()); }
   @override void dispose() { _phone.dispose(); _amount.dispose(); super.dispose(); }
+
+  // Submit a REQUEST-type product → creates a pending bill the admin prices later.
+  Future<void> _submitRequest() async {
+    if (_provider == null || _sub == null) return;
+    if (_phone.text.trim().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(S.required), backgroundColor: AppColors.error)); return; }
+    setState(() => _reqSubmitting = true);
+    try {
+      final r = await UserRepo().createRequest(
+        serviceProviderId: _provider!.id, subServiceId: _sub!.id,
+        type: 'BILL_PAYMENT', amount: 0, phoneNumber: _phone.text.trim());
+      if (!mounted) return;
+      await showModalBottomSheet(context: context, isScrollControlled: true, builder: (_) => SuccessSheet(
+        title: 'تم إرسال الطلب', subtitle: 'ستحدد الإدارة المبلغ ثم تدفعه من "طلباتي"',
+        ref: r.id.substring(0,8).toUpperCase(), onDone: () { Navigator.pop(context); context.pop(); }));
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: AppColors.error));
+    } finally { if (mounted) setState(() => _reqSubmitting = false); }
+  }
 
   double get _fee => _sub != null ? _sub!.feeFor(double.tryParse(_amount.text) ?? 0) : 1.5;
 
@@ -75,8 +95,16 @@ class _RechargeScreenState extends State<RechargeScreen> {
               prefix: const Padding(padding: EdgeInsets.all(14), child: Icon(Icons.phone_android_rounded, size: 20))),
           ])),
           const SizedBox(height: D.md),
+          // REQUEST = no amount; admin prices it later.
+          if (_sub?.isRequest == true) ...[
+            AppCard(child: Row(children: [
+              const Icon(Icons.inbox_rounded, color: AppColors.warning),
+              const SizedBox(width: 10),
+              Expanded(child: Text('هذه الخدمة تُرسل كطلب. ستحدد الإدارة المبلغ ثم تدفعه من شاشة "طلباتي".',
+                style: TS.cap.copyWith(color: AppColors.textSec))),
+            ])),
           // Bundle = fixed price (no amount entry). Otherwise show amount picker.
-          if (_sub?.isBundle == true) ...[
+          ] else if (_sub?.isBundle == true) ...[
             AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('سعر الباقة', style: TS.cap), const SizedBox(height: D.sm),
               Row(children: [
@@ -101,6 +129,10 @@ class _RechargeScreenState extends State<RechargeScreen> {
             ])),
           ],
           const SizedBox(height: D.lg),
+          // REQUEST products submit a bill request instead of an instant charge.
+          if (_sub?.isRequest == true)
+            AppButton(label: 'إرسال الطلب', icon: Icons.send_rounded, isLoading: _reqSubmitting, onPressed: _reqSubmitting ? null : _submitRequest)
+          else
           AppButton(label: _sub?.isBundle == true ? 'اشترِ الباقة' : 'شحن الآن', isLoading: isSubmitting, onPressed: () async {
             final isBundle = _sub?.isBundle == true;
             // For bundles skip amount validation (price is fixed); still need phone.

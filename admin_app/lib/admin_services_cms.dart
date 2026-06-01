@@ -389,6 +389,18 @@ class _ServicePreviewState extends State<ServicePreviewScreen> {
     catch (e) { if (mounted) _err(context, '$e'); }
   }
 
+  Future<void> _subImage(SubService s) async {
+    final src = await showModalBottomSheet<ImageSource>(context: context, builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      ListTile(leading: const Icon(Icons.camera_alt_rounded, color: AC.primary), title: const Text('الكاميرا'), onTap: () => Navigator.pop(context, ImageSource.camera)),
+      ListTile(leading: const Icon(Icons.photo_library_rounded, color: AC.primary), title: const Text('المعرض'), onTap: () => Navigator.pop(context, ImageSource.gallery)),
+    ])));
+    if (src == null) return;
+    final f = await ImagePicker().pickImage(source: src, imageQuality: 85, maxWidth: 600);
+    if (f == null) return;
+    try { await AdminServicesRepo().uploadSubServiceImage(s.id, f.path); _load(); _ok(context, '✅ تم رفع الصورة'); }
+    catch (e) { if (mounted) _err(context, '$e'); }
+  }
+
   @override
   Widget build(BuildContext context) {
     final subs = _selected?.subServices ?? const <SubService>[];
@@ -529,6 +541,12 @@ class _ServicePreviewState extends State<ServicePreviewScreen> {
       margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: AC.surface, borderRadius: BorderRadius.circular(AD.r12), border: Border.all(color: AC.border)),
       child: Row(children: [
+        // Product image (tap to change) or placeholder
+        GestureDetector(onTap: () => _subImage(s), child: (s.imageUrl != null && s.imageUrl!.isNotEmpty)
+          ? ClipRRect(borderRadius: BorderRadius.circular(8), child: CachedNetworkImage(imageUrl: s.imageUrl!, width: 44, height: 44, fit: BoxFit.cover,
+              errorWidget: (_,__,___) => _imgPlaceholder()))
+          : _imgPlaceholder()),
+        const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Text(s.nameAr, style: AT.bodyM),
@@ -547,11 +565,16 @@ class _ServicePreviewState extends State<ServicePreviewScreen> {
               size: 14, color: isBundle ? AC.info : isReq ? AC.warning : AC.success),
           ]),
         ])),
+        IconButton(icon: const Icon(Icons.image_rounded, size: 18, color: AC.accent), tooltip: 'صورة', onPressed: () => _subImage(s)),
         IconButton(icon: const Icon(Icons.edit_rounded, size: 18, color: AC.primary), onPressed: () => _editSub(s)),
         IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AC.error), onPressed: () => _deleteSub(s)),
       ]),
     );
   }
+
+  Widget _imgPlaceholder() => Container(width: 44, height: 44,
+    decoration: BoxDecoration(color: widget.color.withOpacity(0.10), borderRadius: BorderRadius.circular(8)),
+    child: Icon(Icons.add_a_photo_outlined, color: widget.color, size: 20));
 }
 
 // ══════════════════════════════════════════════════════════

@@ -150,6 +150,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
               final choice = await showInsufficientBalanceChoice(context,
                 current: balance, needed: total, payLaterEligible: user?.payLaterEligible ?? false);
               if (choice == 'recharge' && context.mounted) { context.push(AppRoutes.walletTopup); return; }
+              if (choice == 'activate' && context.mounted) { context.push(AppRoutes.payLater); return; }
               if (choice == 'paylater' && context.mounted) {
                 // Pay on credit: complete now, wallet goes negative.
                 setState(() {});

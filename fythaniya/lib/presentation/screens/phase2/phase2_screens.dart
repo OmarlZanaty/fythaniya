@@ -157,14 +157,15 @@ Future<String?> showInsufficientBalanceChoice(BuildContext context, {required do
         Text('المبلغ المطلوب: ${needed.toStringAsFixed(2)} ${S.egp}', style: TS.body.copyWith(color: AppColors.textSec)),
         Text('النقص: ${shortfall.toStringAsFixed(2)} ${S.egp}', style: TS.bodyM.copyWith(color: AppColors.error)),
         const SizedBox(height: D.lg),
-        if (payLaterEligible) ...[
-          SizedBox(width: double.infinity, child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
-            icon: const Icon(Icons.schedule_rounded), label: const Text('ادفع لاحقاً (على الحساب)'),
-            onPressed: () => Navigator.pop(_, 'paylater'),
-          )),
-          const SizedBox(height: D.sm),
-        ],
+        // Pay-later always shown. Eligible → pay on credit. Not eligible →
+        // route to activation so they can enable the service.
+        SizedBox(width: double.infinity, child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+          icon: const Icon(Icons.schedule_rounded),
+          label: Text(payLaterEligible ? 'ادفع لاحقاً (على الحساب)' : 'فعّل الدفع الآجل'),
+          onPressed: () => Navigator.pop(_, payLaterEligible ? 'paylater' : 'activate'),
+        )),
+        const SizedBox(height: D.sm),
         SizedBox(width: double.infinity, child: ElevatedButton.icon(
           icon: const Icon(Icons.add_circle_rounded), label: const Text('شحن المحفظة الآن'),
           onPressed: () => Navigator.pop(_, 'recharge'),

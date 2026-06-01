@@ -138,7 +138,46 @@ class _PNBState extends State<PaymentNumbersBlock> {
 }
 
 // ════════════════════════════════════════════════════════
-// INSUFFICIENT BALANCE MODAL
+// INSUFFICIENT BALANCE — choice modal (recharge / pay-later / cancel)
+// Returns 'recharge', 'paylater', or null. Pay-later only when eligible.
+// ════════════════════════════════════════════════════════
+Future<String?> showInsufficientBalanceChoice(BuildContext context, {required double current, required double needed, required bool payLaterEligible}) async {
+  final shortfall = needed - current;
+  return showModalBottomSheet<String>(
+    context: context, isScrollControlled: true,
+    builder: (_) => Padding(
+      padding: EdgeInsets.only(left: D.lg, right: D.lg, top: D.lg, bottom: MediaQuery.of(context).viewInsets.bottom + D.lg),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 64, height: 64, decoration: const BoxDecoration(color: AppColors.errorBg, shape: BoxShape.circle),
+          child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 40)),
+        const SizedBox(height: D.md),
+        Text('الرصيد غير كافٍ', style: TS.h2, textAlign: TextAlign.center),
+        const SizedBox(height: D.sm),
+        Text('رصيدك الحالي: ${current.toStringAsFixed(2)} ${S.egp}', style: TS.body.copyWith(color: AppColors.textSec)),
+        Text('المبلغ المطلوب: ${needed.toStringAsFixed(2)} ${S.egp}', style: TS.body.copyWith(color: AppColors.textSec)),
+        Text('النقص: ${shortfall.toStringAsFixed(2)} ${S.egp}', style: TS.bodyM.copyWith(color: AppColors.error)),
+        const SizedBox(height: D.lg),
+        if (payLaterEligible) ...[
+          SizedBox(width: double.infinity, child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+            icon: const Icon(Icons.schedule_rounded), label: const Text('ادفع لاحقاً (على الحساب)'),
+            onPressed: () => Navigator.pop(_, 'paylater'),
+          )),
+          const SizedBox(height: D.sm),
+        ],
+        SizedBox(width: double.infinity, child: ElevatedButton.icon(
+          icon: const Icon(Icons.add_circle_rounded), label: const Text('شحن المحفظة الآن'),
+          onPressed: () => Navigator.pop(_, 'recharge'),
+        )),
+        const SizedBox(height: D.sm),
+        SizedBox(width: double.infinity, child: TextButton(onPressed: () => Navigator.pop(_, null), child: const Text('إلغاء'))),
+      ]),
+    ),
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// INSUFFICIENT BALANCE MODAL (legacy bool — recharge only)
 // ════════════════════════════════════════════════════════
 Future<bool> showInsufficientBalanceModal(BuildContext context, {required double current, required double needed}) async {
   final shortfall = needed - current;

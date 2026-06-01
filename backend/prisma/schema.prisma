@@ -140,6 +140,8 @@ model Request {
   metadata          String?
   proofImageUrl     String?
   paymentMethod     String?
+  // Pay-later: paid on credit; user wallet went negative until they settle.
+  isPayLater        Boolean          @default(false)
   // Smart-billing: admin sets the bill amount AFTER receiving the request
   billingNumber     String?
   billingType       String?

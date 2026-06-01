@@ -193,6 +193,7 @@ class AdminRoutes {
   static const String clients    = '/clients';
   static const String appSettings= '/app-settings';
   static const String homeTiles  = '/home-tiles';
+  static const String payLaterDebts = '/pay-later-debts';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -258,6 +259,7 @@ class RequestItem {
   final String? billingNumber, billingType, receiverName, bankName, bankAccount, instapayId;
   final double? adminSetAmount;
   final String? processorId;
+  final bool isPayLater;
   final DateTime createdAt;
   final DateTime? completedAt,slaDeadline;
   final Map<String,dynamic>? user,serviceProvider,subService,processor;
@@ -267,7 +269,7 @@ class RequestItem {
     required this.amount,required this.fee,required this.totalAmount,
     this.accountNumber,this.phoneNumber,this.adminNote,this.externalRef,this.proofImageUrl,this.paymentMethod,
     this.billingNumber,this.billingType,this.receiverName,this.bankName,this.bankAccount,this.instapayId,this.adminSetAmount,
-    this.processorId,required this.createdAt,this.completedAt,this.slaDeadline,
+    this.processorId,this.isPayLater=false,required this.createdAt,this.completedAt,this.slaDeadline,
     this.user,this.serviceProvider,this.subService,this.processor,this.slaBreached=false});
 
   factory RequestItem.fromJson(Map<String,dynamic> j)=>RequestItem(
@@ -286,6 +288,7 @@ class RequestItem {
     instapayId:j['instapayId'] as String?,
     adminSetAmount:j['adminSetAmount']!=null?double.tryParse(j['adminSetAmount'].toString()):null,
     processorId:j['processorId'] as String?,
+    isPayLater:(j['isPayLater'] as bool?)??false,
     createdAt:DateTime.tryParse(j['createdAt']?.toString() ?? '') ?? DateTime.now(),
     completedAt:j['completedAt']!=null?DateTime.tryParse(j['completedAt'] as String):null,
     slaDeadline:j['slaDeadline']!=null?DateTime.tryParse(j['slaDeadline'] as String):null,

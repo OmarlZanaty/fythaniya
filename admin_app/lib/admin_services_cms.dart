@@ -1162,3 +1162,85 @@ class _FeeChip extends StatelessWidget {
     ]),
   );
 }
+
+// ══════════════════════════════════════════════════════════
+//  PAY-LATER DEBTS SCREEN (admin)
+// ══════════════════════════════════════════════════════════
+class PayLaterDebtsScreen extends StatefulWidget {
+  const PayLaterDebtsScreen({super.key});
+  @override State<PayLaterDebtsScreen> createState() => _PayLaterDebtsState();
+}
+class _PayLaterDebtsState extends State<PayLaterDebtsScreen> {
+  List<Map<String,dynamic>> _users = [];
+  double _totalOwed = 0;
+  bool _loading = true;
+
+  @override void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final d = await AdminPayLaterRepo().debts();
+      if (mounted) setState(() {
+        _users = ((d['users'] as List?) ?? []).cast<Map<String,dynamic>>();
+        _totalOwed = (d['totalOwed'] as num?)?.toDouble() ?? 0;
+        _loading = false;
+      });
+    } catch (e) { if (mounted) { setState(() => _loading = false); _err(context, '$e'); } }
+  }
+
+  Future<void> _settle(Map<String,dynamic> u) async {
+    final owed = (u['owed'] as num?)?.toDouble() ?? 0;
+    final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+      title: const Text('تسجيل سداد'),
+      content: Text('تأكيد سداد ${owed.toStringAsFixed(2)} ج.م من ${u['fullName']}؟ سيعود رصيده إلى صفر.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+        TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('تأكيد السداد', style: TextStyle(color: AC.success))),
+      ],
+    ));
+    if (ok != true) return;
+    try { await AdminPayLaterRepo().settle(u['id'] as String); _load(); _ok(context, 'تم تسجيل السداد'); }
+    catch (e) { if (mounted) _err(context, '$e'); }
+  }
+
+  @override
+  Widget build(BuildContext ctx) => Scaffold(
+    backgroundColor: AC.bg,
+    bottomNavigationBar: const AdminBottomNav(),
+    appBar: AppBar(
+      title: const Text('الدفع الآجل'),
+      backgroundColor: AC.primary,
+      actions: [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load)],
+    ),
+    body: _loading
+      ? const Center(child: CircularProgressIndicator(color: AC.primary))
+      : RefreshIndicator(color: AC.primary, onRefresh: _load, child: Column(children: [
+          // Total owed banner
+          Container(width: double.infinity, margin: const EdgeInsets.all(AD.md), padding: const EdgeInsets.all(AD.md),
+            decoration: BoxDecoration(color: AC.primary, borderRadius: BorderRadius.circular(AD.r16)),
+            child: Column(children: [
+              Text('إجمالي المستحق', style: AT.cap.copyWith(color: Colors.white70)),
+              const SizedBox(height: 4),
+              Text('${_totalOwed.toStringAsFixed(2)} ج.م', style: AT.num.copyWith(color: Colors.white, fontSize: 26)),
+              Text('${_users.length} عميل', style: AT.cap.copyWith(color: Colors.white70)),
+            ])),
+          Expanded(child: _users.isEmpty
+            ? ListView(children: const [SizedBox(height: 80), Center(child: Text('لا يوجد ديون دفع آجل حالياً'))])
+            : ListView.builder(padding: const EdgeInsets.symmetric(horizontal: AD.md), itemCount: _users.length, itemBuilder: (_, i) {
+                final u = _users[i];
+                final owed = (u['owed'] as num?)?.toDouble() ?? 0;
+                final name = u['fullName']?.toString() ?? '—';
+                return Card(margin: const EdgeInsets.only(bottom: 10), child: ListTile(
+                  leading: CircleAvatar(backgroundColor: AC.warningBg, child: Text(name.isNotEmpty ? name[0] : '؟', style: AT.bodyM.copyWith(color: AC.warning))),
+                  title: Text(name, style: AT.bodyM),
+                  subtitle: Text('${u['phone']}', style: AT.cap, textDirection: TextDirection.ltr),
+                  trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Text('-${owed.toStringAsFixed(0)} ج.م', style: AT.bodyM.copyWith(color: AC.error, fontWeight: FontWeight.w700)),
+                    TextButton(onPressed: () => _settle(u), child: const Text('تسجيل سداد', style: TextStyle(fontSize: 11))),
+                  ]),
+                ));
+              })),
+        ])),
+  );
+}

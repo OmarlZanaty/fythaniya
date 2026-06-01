@@ -246,7 +246,7 @@ class UserRepo {
 
   Future<RequestModel> createRequest({required String serviceProviderId, String? subServiceId,
     required String type, required double amount, String? accountNumber, String? phoneNumber,
-    String? paymentMethod, String? proofImageUrl}) async {
+    String? paymentMethod, String? proofImageUrl, bool usePayLater=false}) async {
     final res = await _c.post('/user/requests', body:{
       'serviceProviderId':serviceProviderId, if(subServiceId!=null)'subServiceId':subServiceId,
       'type':type, 'amount':amount,
@@ -254,6 +254,7 @@ class UserRepo {
       if(phoneNumber!=null)'phoneNumber':phoneNumber,
       if(paymentMethod!=null)'paymentMethod':paymentMethod,
       if(proofImageUrl!=null)'proofImageUrl':proofImageUrl,
+      if(usePayLater)'usePayLater':true,
     });
     return RequestModel.fromJson(res['data'] as Map<String,dynamic>);
   }

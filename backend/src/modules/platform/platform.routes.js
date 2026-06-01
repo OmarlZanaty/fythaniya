@@ -532,4 +532,44 @@ router.delete('/admin/service-categories/:key', authenticateAdmin, requireRole('
   }
 );
 
+// ═══════════════════════════════════════════════════════════
+//  PAY-LATER DEBTS (admin) — who owes + how much
+// ═══════════════════════════════════════════════════════════
+router.get('/admin/pay-later-debts', authenticateAdmin, async (req, res, next) => {
+  try {
+    // Anyone whose wallet went negative owes that amount.
+    const users = await prisma.user.findMany({
+      where: { walletBalance: { lt: 0 } },
+      orderBy: { walletBalance: 'asc' }, // most owed first
+      select: { id: true, fullName: true, phone: true, walletBalance: true, payLaterEligible: true },
+    });
+    const data = users.map(u => ({
+      id: u.id, fullName: u.fullName, phone: u.phone,
+      walletBalance: Number(u.walletBalance),
+      owed: Math.abs(Number(u.walletBalance)),
+      payLaterEligible: u.payLaterEligible,
+    }));
+    const totalOwed = data.reduce((s, u) => s + u.owed, 0);
+    return apiResponse.success(res, { users: data, totalOwed, count: data.length });
+  } catch (err) { next(err); }
+});
+
+// Admin: settle (clear) a user's pay-later debt — sets wallet back to >= 0.
+// `amount` optional: partial settle; omitted = clear the whole debt to 0.
+router.post('/admin/pay-later-debts/:userId/settle', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
+  async (req, res, next) => {
+    try {
+      const u = await prisma.user.findUnique({ where: { id: req.params.userId }, select: { walletBalance: true, fullName: true } });
+      if (!u) return apiResponse.error(res, 'User not found', 404);
+      const debt = Math.abs(Math.min(0, Number(u.walletBalance)));
+      if (debt === 0) return apiResponse.error(res, 'لا يوجد دين على هذا المستخدم', 400);
+      const pay = req.body.amount != null ? Math.min(Number(req.body.amount), debt) : debt;
+      const updated = await prisma.user.update({ where: { id: req.params.userId }, data: { walletBalance: { increment: pay } } });
+      await prisma.transaction.create({ data: { userId: req.params.userId, amount: pay, fee: 0, totalAmount: pay, status: 'SUCCESS', paymentMethod: 'PAY_LATER_SETTLE' } });
+      await notifyUser(req.params.userId, '✅ تم سداد الدفع الآجل', `تم تسجيل سداد ${pay} ج.م. رصيدك الآن ${Number(updated.walletBalance)} ج.م`, 'HIGH');
+      return apiResponse.success(res, { newBalance: Number(updated.walletBalance) }, 'تم تسجيل السداد');
+    } catch (err) { next(err); }
+  }
+);
+
 module.exports = router;

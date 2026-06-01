@@ -87,11 +87,12 @@ router.post('/requests',
     body('bankName').optional().isString(),
     body('bankAccount').optional().isString(),
     body('instapayId').optional().isString(),
+    body('usePayLater').optional().isBoolean(),
   ], validate,
   async (req, res, next) => {
     try {
       const { serviceProviderId, subServiceId, type, accountNumber, phoneNumber, paymentMethod, proofImageUrl,
-              billingNumber, billingType, receiverName, bankName, bankAccount, instapayId } = req.body;
+              billingNumber, billingType, receiverName, bankName, bankAccount, instapayId, usePayLater } = req.body;
       let { amount } = req.body;
       // BILL_PAYMENT may come in with no amount (admin will set it later); everything else needs a positive amount.
       const isBillPending = type === 'BILL_PAYMENT' && (amount == null || Number(amount) === 0);
@@ -118,6 +119,34 @@ router.post('/requests',
       const isCritical = ['MOBILE_RECHARGE'].includes(type);
       const slaMinutes = isCritical ? 5 : 15;
       const slaDeadline = new Date(Date.now() + slaMinutes * 60000);
+
+      // ── PAY LATER ──────────────────────────────────────────────
+      // User chose to pay on credit: complete immediately, let wallet go
+      // negative, flag the request. Requires payLaterEligible + a real amount.
+      if (usePayLater === true && !isBillPending) {
+        const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { payLaterEligible: true } });
+        if (!me?.payLaterEligible) return apiResponse.error(res, 'خدمة الدفع الآجل غير مفعّلة لحسابك', 403);
+        const plRequest = await prisma.request.create({
+          data: {
+            userId: req.user.id, serviceProviderId: serviceProviderId || null, subServiceId: subServiceId || null,
+            type, status: 'COMPLETED', completedAt: new Date(),
+            amount, fee, totalAmount, isPayLater: true,
+            accountNumber: accountNumber || null, phoneNumber: phoneNumber || null,
+            paymentMethod: 'PAY_LATER', billingNumber: billingNumber || null, billingType: billingType || null,
+            receiverName: receiverName || null, bankName: bankName || null, bankAccount: bankAccount || null,
+            instapayId: instapayId || null, slaDeadline,
+          },
+          include: { serviceProvider: true, subService: true },
+        });
+        await prisma.$transaction([
+          prisma.user.update({ where: { id: req.user.id }, data: { walletBalance: { decrement: totalAmount } } }),
+          prisma.transaction.create({ data: { userId: req.user.id, requestId: plRequest.id, amount, fee, totalAmount, status: 'SUCCESS', paymentMethod: 'PAY_LATER' } }),
+        ]);
+        await notifyAdmins(`🟠 دفع آجل — ${type}`, `${totalAmount} ج.م على الحساب (دفع لاحقاً)`, 'HIGH', plRequest.id, null, { requestId: plRequest.id, type, amount: String(totalAmount), payLater: 'true' });
+        emitToAdmins(io, 'new_request', { requestId: plRequest.id, type, amount: totalAmount, userId: req.user.id, payLater: true });
+        await notifyUser(req.user.id, '🟠 تم الدفع بالآجل', `تم تنفيذ طلبك بمبلغ ${totalAmount} ج.م على الحساب. يُرجى السداد لاحقاً.`, 'HIGH', { requestId: plRequest.id });
+        return apiResponse.success(res, plRequest, 'تم الدفع بالآجل', 201);
+      }
 
       // Balance enforcement for instant-payment types:
       // If user has enough balance, auto-deduct + mark COMPLETED. Otherwise create PENDING (admin will manually handle external payment).

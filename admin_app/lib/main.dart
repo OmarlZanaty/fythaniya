@@ -80,6 +80,7 @@ class _AdminAppState extends State<AdminApp> {
         GoRoute(path:AdminRoutes.clients,        builder:(_,__)=>const AdminShell(child:ClientSearchScreen())),
         GoRoute(path:AdminRoutes.appSettings,    builder:(_,__)=>const AdminShell(child:AdminSettingsScreen())),
         GoRoute(path:AdminRoutes.homeTiles,      builder:(_,__)=>const AdminShell(child:HomeTilesScreen())),
+        GoRoute(path:AdminRoutes.payLaterDebts,  builder:(_,__)=>const AdminShell(child:PayLaterDebtsScreen())),
         GoRoute(path:'/requests/:id/chat',       builder:(_,s)=>AdminShell(child:RequestChatScreen(requestId:s.pathParameters['id']!))),
       ]);
   }
@@ -348,6 +349,7 @@ class AdminDrawer extends StatelessWidget {
       _DItem(Icons.payments_rounded,'أرقام الدفع',AdminRoutes.paymentNumbers),
       _DItem(Icons.search_rounded,'بحث العملاء',AdminRoutes.clients),
       _DItem(Icons.apps_rounded,'أيقونات الرئيسية',AdminRoutes.homeTiles),
+      _DItem(Icons.schedule_rounded,'الدفع الآجل',AdminRoutes.payLaterDebts),
       _DItem(Icons.tune_rounded,'إعدادات التطبيق',AdminRoutes.appSettings),
       const Divider(),
       _DItem(Icons.settings_rounded,'الإعدادات',AdminRoutes.settings),
@@ -471,6 +473,15 @@ class _ReqDetailState extends State<RequestDetailScreen> {
         // Header
         ACard(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Row(children:[Text(_req!.type,style:AT.h3),const Spacer(),StatusBadge(status:_req!.status)]),
+          if (_req!.isPayLater) ...[
+            const SizedBox(height:8),
+            Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:5),
+              decoration:BoxDecoration(color:AC.warningBg,borderRadius:BorderRadius.circular(20)),
+              child:Row(mainAxisSize:MainAxisSize.min,children:[
+                const Icon(Icons.schedule_rounded,size:14,color:AC.warning),const SizedBox(width:5),
+                Text('دفع آجل (على الحساب)',style:AT.cap.copyWith(color:AC.warning,fontWeight:FontWeight.w700)),
+              ])),
+          ],
           const Divider(height:16),
           _Row('المبلغ','${_req!.amount.toStringAsFixed(2)} ج.م'),
           _Row('الرسوم','${_req!.fee.toStringAsFixed(2)} ج.م'),

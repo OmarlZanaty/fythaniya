@@ -8,7 +8,7 @@ import 'package:fythaniya/data/models/models.dart';
 import 'package:fythaniya/core/network/api_client.dart';
 import 'package:fythaniya/presentation/blocs/blocs.dart';
 import 'package:fythaniya/presentation/widgets/common/widgets.dart';
-import 'package:fythaniya/presentation/screens/phase2/phase2_screens.dart' show showInsufficientBalanceModal;
+import 'package:fythaniya/presentation/screens/phase2/phase2_screens.dart' show showInsufficientBalanceModal, showInsufficientBalanceChoice;
 
 class RechargeScreen extends StatefulWidget {
   // When set, the screen locks to this single provider and hides the picker —
@@ -142,12 +142,30 @@ class _RechargeScreenState extends State<RechargeScreen> {
             } else if (!_form.currentState!.validate()) { return; }
             final amount = isBundle ? (_sub!.bundlePrice ?? 0) : double.parse(_amount.text);
             final total  = amount + (_sub?.feeFor(amount) ?? _fee);
-            // Gate on wallet balance — redirect to top-up if not enough.
+            // Gate on wallet balance — offer pay-later (if eligible) or top-up.
             final hs = context.read<HomeBloc>().state;
-            final balance = hs is HomeLoaded ? hs.user.walletBalance : 0.0;
+            final user = hs is HomeLoaded ? hs.user : null;
+            final balance = user?.walletBalance ?? 0.0;
             if (balance < total) {
-              final go = await showInsufficientBalanceModal(context, current: balance, needed: total);
-              if (go && context.mounted) context.push(AppRoutes.walletTopup);
+              final choice = await showInsufficientBalanceChoice(context,
+                current: balance, needed: total, payLaterEligible: user?.payLaterEligible ?? false);
+              if (choice == 'recharge' && context.mounted) { context.push(AppRoutes.walletTopup); return; }
+              if (choice == 'paylater' && context.mounted) {
+                // Pay on credit: complete now, wallet goes negative.
+                setState(() {});
+                try {
+                  await UserRepo().createRequest(
+                    serviceProviderId: _provider!.id, subServiceId: _sub?.id,
+                    type: 'MOBILE_RECHARGE', amount: amount, phoneNumber: _phone.text.trim(), usePayLater: true);
+                  if (!context.mounted) return;
+                  context.read<HomeBloc>().add(HomeRefreshEvent());
+                  await showModalBottomSheet(context: context, isScrollControlled: true, builder: (_) => SuccessSheet(
+                    title: 'تم الدفع بالآجل 🟠', subtitle: 'تم تنفيذ طلبك على الحساب. رصيدك أصبح بالسالب حتى السداد.',
+                    onDone: () { Navigator.pop(context); context.pop(); }));
+                } on ApiException catch (e) {
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: AppColors.error));
+                }
+              }
               return;
             }
             if (!context.mounted) return;

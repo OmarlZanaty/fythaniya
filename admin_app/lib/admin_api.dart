@@ -166,6 +166,17 @@ class AdminPaymentNumbersRepo {
   }
 }
 
+// ── Pay-Later Debts ───────────────────────────────────────
+class AdminPayLaterRepo {
+  final _c = AdminApiClient.instance;
+  Future<Map<String,dynamic>> debts() async {
+    final res = await _c.get('/admin/pay-later-debts');
+    return (res['data'] as Map<String,dynamic>?) ?? {'users': [], 'totalOwed': 0, 'count': 0};
+  }
+  Future<void> settle(String userId, {double? amount}) =>
+    _c.post('/admin/pay-later-debts/$userId/settle', body: amount != null ? {'amount': amount} : {});
+}
+
 // ── Admin Home Tiles ──────────────────────────────────────
 class AdminHomeTilesRepo {
   final _c = AdminApiClient.instance;

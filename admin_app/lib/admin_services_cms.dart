@@ -1012,7 +1012,7 @@ class _SubFormDialogState extends State<_SubFormDialog> {
   final _name   = TextEditingController();
   final _fixed  = TextEditingController(text: '0');
   final _bundle = TextEditingController(); // bundle fixed price
-  double _pct = 0;        // 0..30 → 0%..30%
+  double _pct = 0;        // 0..50 → 0%..50%
   String _mode = 'AMOUNT'; // AMOUNT | REQUEST | BUNDLE
 
   @override void initState() {
@@ -1022,7 +1022,7 @@ class _SubFormDialogState extends State<_SubFormDialog> {
       _nameAr.text = e.nameAr;
       _name.text   = e.name;
       _fixed.text  = e.fixedFee.toStringAsFixed(2);
-      _pct         = (e.percentageFee * 100).clamp(0, 30).toDouble();
+      _pct         = (e.percentageFee * 100).clamp(0, 50).toDouble();
       _mode        = e.serviceMode;
       if (e.bundlePrice != null) _bundle.text = e.bundlePrice!.toStringAsFixed(2);
     }
@@ -1072,7 +1072,7 @@ class _SubFormDialogState extends State<_SubFormDialog> {
           Text('نسبة العمولة: ', style: AT.cap),
           Text('${_pct.toStringAsFixed(2)}%', style: AT.bodyM.copyWith(color: AC.primary, fontWeight: FontWeight.w700)),
         ]),
-        Slider(value: _pct, min: 0, max: 30, divisions: 300, activeColor: AC.primary,
+        Slider(value: _pct, min: 0, max: 50, divisions: 500, activeColor: AC.primary,
           label: '${_pct.toStringAsFixed(2)}%', onChanged: (v) => setState(() => _pct = v)),
       ],
     ]))),

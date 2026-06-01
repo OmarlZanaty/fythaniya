@@ -1228,14 +1228,14 @@ class _SubServiceFormDialogState extends State<_SubServiceFormDialog> {
   final _nameAr = TextEditingController();
   final _name   = TextEditingController();
   final _fixedCtrl = TextEditingController();
-  double _pctSlider = 0; // 0..30 representing 0%..30%
+  double _pctSlider = 0; // 0..50 representing 0%..50%
   @override void initState() {
     super.initState();
     final e = widget.existing;
     _nameAr.text  = e?.nameAr ?? '';
     _name.text    = e?.name ?? '';
     _fixedCtrl.text = e?.fixedFee.toStringAsFixed(2) ?? '0';
-    _pctSlider = ((e?.percentageFee ?? 0) * 100).clamp(0, 30).toDouble();
+    _pctSlider = ((e?.percentageFee ?? 0) * 100).clamp(0, 50).toDouble();
   }
   @override void dispose() { _nameAr.dispose(); _name.dispose(); _fixedCtrl.dispose(); super.dispose(); }
   @override
@@ -1257,13 +1257,13 @@ class _SubServiceFormDialogState extends State<_SubServiceFormDialog> {
         Text('${_pctSlider.toStringAsFixed(2)}%', style: AT.bodyM.copyWith(color: AC.primary)),
       ]),
       Slider(
-        value: _pctSlider, min: 0, max: 30, divisions: 300,
+        value: _pctSlider, min: 0, max: 50, divisions: 500,
         activeColor: AC.primary, inactiveColor: AC.surfaceAlt,
         label: '${_pctSlider.toStringAsFixed(2)}%',
         onChanged: (v) => setState(() => _pctSlider = v),
       ),
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('0%', style: AT.cap), Text('5%', style: AT.cap), Text('10%', style: AT.cap), Text('30%', style: AT.cap),
+        Text('0%', style: AT.cap), Text('10%', style: AT.cap), Text('25%', style: AT.cap), Text('50%', style: AT.cap),
       ]),
     ]))),
     actions: [

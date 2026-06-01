@@ -72,17 +72,6 @@ class _PayLaterScreenState extends State<PayLaterScreen> {
             isLoading: _loading, onPressed: _loading ? null : _requestActivation,
           ),
         ])),
-        const SizedBox(height: D.md),
-        AppCard(padding: const EdgeInsets.all(D.md), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('المزايا', style: TS.bodyM),
-          const SizedBox(height: D.sm),
-          ...['ادفع فواتيرك لاحقاً بدون رصيد', 'الوصول إلى خدمة فودافون كاش', 'حد ائتماني حسب نشاطك']
-              .map((b) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [
-                Icon(Icons.check_rounded, color: AppColors.success, size: 18),
-                const SizedBox(width: 8),
-                Expanded(child: Text(b, style: TS.body)),
-              ]))),
-        ])),
       ]));
     }),
   );

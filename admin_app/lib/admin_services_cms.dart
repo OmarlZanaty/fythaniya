@@ -160,35 +160,26 @@ class _CmsState extends State<AdminServicesCmsScreen> {
     'bill_internet': 'INTERNET', 'instapay': 'INSTAPAY', 'bank_transfer': 'BANK',
   };
 
-  // Tap a tile → manage the providers/sub-services the user sees inside it.
+  // Tap a tile → open the customer-screen mirror so admin sees + edits exactly
+  // what the user sees inside that icon.
   void _openTile(Map<String, dynamic> tile) {
-    // If the tile is linked to a specific provider, open that provider's products directly.
+    final color = _hexColor(tile['colorHex'] as String?);
     final pid = tile['providerId'] as String?;
-    if (pid != null && pid.isNotEmpty) {
-      final prov = _providers.where((p) => p.id == pid).firstOrNull;
-      if (prov != null) {
-        Navigator.push(context, MaterialPageRoute(builder: (_) =>
-          ProviderSubServicesScreen(provider: prov, catColor: _hexColor(tile['colorHex'] as String?))));
-        return;
-      }
-    }
     final route = tile['route'] as String?;
-    // For known routes, use the SAME category the user app loads (route-based).
-    // This ignores any free-text category accidentally stored on the tile.
+    // Resolve the category the user app would load for this tile.
     var cat = _routeCategory[route];
-    // Only fall back to the tile's explicit category if route isn't a known one
-    // AND the stored category looks like a real key (UPPERCASE / ascii).
     if (cat == null) {
       final raw = (tile['category'] as String?)?.trim();
       if (raw != null && raw.isNotEmpty && RegExp(r'^[A-Z0-9_]+$').hasMatch(raw)) cat = raw;
     }
-    if (cat == null || cat.isEmpty) {
+    if ((cat == null || cat.isEmpty) && (pid == null || pid.isEmpty)) {
       // No provider category (wallet/rewards/notifs…) — only appearance editable.
       _editTile(tile);
       return;
     }
-    Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryProvidersScreen(
-      category: {'key': cat, 'nameAr': tile['label'], 'colorHex': tile['colorHex'], 'iconKey': tile['iconKey']},
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ServicePreviewScreen(
+      categoryKey: cat, lockedProviderId: (pid != null && pid.isNotEmpty) ? pid : null,
+      title: (tile['label'] as String?) ?? 'الخدمة', color: color,
     )));
   }
 
@@ -299,6 +290,260 @@ class _CmsState extends State<AdminServicesCmsScreen> {
             ]),
           ),
   );
+}
+
+// ══════════════════════════════════════════════════════════
+//  SERVICE PREVIEW — mirrors the user recharge screen, editable
+// ══════════════════════════════════════════════════════════
+// Shows the exact customer layout (provider chips + phone + amount + quick
+// amounts) and lets the admin add/edit providers and their products inline.
+class ServicePreviewScreen extends StatefulWidget {
+  final String? categoryKey;       // load all providers of this category
+  final String? lockedProviderId;  // OR lock to a single provider
+  final String title;
+  final Color color;
+  const ServicePreviewScreen({super.key, this.categoryKey, this.lockedProviderId, required this.title, required this.color});
+  @override State<ServicePreviewScreen> createState() => _ServicePreviewState();
+}
+
+class _ServicePreviewState extends State<ServicePreviewScreen> {
+  List<ServiceProvider> _providers = [];
+  ServiceProvider? _selected;
+  bool _loading = true;
+
+  @override void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final all = await AdminServicesRepo().getProviders();
+      var list = all.where((p) {
+        if (widget.lockedProviderId != null) return p.id == widget.lockedProviderId;
+        return p.category == widget.categoryKey;
+      }).toList();
+      if (mounted) setState(() {
+        _providers = list;
+        // keep selection if still present, else pick first
+        _selected = list.where((p) => p.id == _selected?.id).firstOrNull ?? (list.isNotEmpty ? list.first : null);
+        _loading = false;
+      });
+    } catch (e) { if (mounted) { setState(() => _loading = false); _err(context, '$e'); } }
+  }
+
+  // ── provider CRUD ──
+  Future<void> _addProvider() async {
+    final cat = widget.categoryKey ?? _selected?.category ?? 'TELECOM';
+    final r = await showDialog<Map<String,dynamic>>(context: context, builder: (_) => _ProviderFormDialog(categoryKey: cat));
+    if (r == null) return;
+    try { await AdminServicesRepo().createProvider(r); _load(); _ok(context, '✅ تم إضافة المزود'); }
+    catch (e) { if (mounted) _err(context, '$e'); }
+  }
+  Future<void> _editProvider(ServiceProvider p) async {
+    final r = await showDialog<Map<String,dynamic>>(context: context, builder: (_) => _ProviderFormDialog(existing: p, categoryKey: p.category));
+    if (r == null) return;
+    try { await AdminServicesRepo().updateProvider(p.id, r); _load(); _ok(context, '✅ تم التعديل'); }
+    catch (e) { if (mounted) _err(context, '$e'); }
+  }
+  Future<void> _deleteProvider(ServiceProvider p) async {
+    final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+      title: const Text('حذف المزود'), content: Text('حذف "${p.displayName}" وكل منتجاته؟'),
+      actions: [TextButton(onPressed: ()=>Navigator.pop(context,false), child: const Text('إلغاء')),
+                TextButton(onPressed: ()=>Navigator.pop(context,true), child: const Text('حذف', style: TextStyle(color: AC.error)))]));
+    if (ok != true) return;
+    try { await AdminServicesRepo().deleteProvider(p.id); if (_selected?.id==p.id) _selected=null; _load(); _ok(context, 'تم الحذف'); }
+    catch (e) { if (mounted) _err(context, '$e'); }
+  }
+  Future<void> _providerLogo(ServiceProvider p) async {
+    final src = await showModalBottomSheet<ImageSource>(context: context, builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      ListTile(leading: const Icon(Icons.camera_alt_rounded, color: AC.primary), title: const Text('الكاميرا'), onTap: () => Navigator.pop(context, ImageSource.camera)),
+      ListTile(leading: const Icon(Icons.photo_library_rounded, color: AC.primary), title: const Text('المعرض'), onTap: () => Navigator.pop(context, ImageSource.gallery)),
+    ])));
+    if (src == null) return;
+    final f = await ImagePicker().pickImage(source: src, imageQuality: 85, maxWidth: 600);
+    if (f == null) return;
+    try { await AdminServicesRepo().uploadProviderLogo(p.id, f.path); _load(); _ok(context, '✅ تم رفع الشعار'); }
+    catch (e) { if (mounted) _err(context, '$e'); }
+  }
+
+  // ── sub-service CRUD ──
+  Future<void> _addSub() async {
+    if (_selected == null) { _err(context, 'اختر مزوداً أولاً'); return; }
+    final r = await showDialog<Map<String,dynamic>>(context: context, builder: (_) => _SubFormDialog(category: _selected!.category));
+    if (r == null) return;
+    try { await AdminServicesRepo().createSubService(_selected!.id, r); _load(); _ok(context, '✅ تم إضافة المنتج'); }
+    catch (e) { if (mounted) _err(context, '$e'); }
+  }
+  Future<void> _editSub(SubService s) async {
+    final r = await showDialog<Map<String,dynamic>>(context: context, builder: (_) => _SubFormDialog(existing: s, category: s.category));
+    if (r == null) return;
+    try { await AdminServicesRepo().updateSubService(s.id, r); _load(); _ok(context, '✅ تم التعديل'); }
+    catch (e) { if (mounted) _err(context, '$e'); }
+  }
+  Future<void> _deleteSub(SubService s) async {
+    final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+      title: const Text('حذف المنتج'), content: Text('حذف "${s.nameAr}"؟'),
+      actions: [TextButton(onPressed: ()=>Navigator.pop(context,false), child: const Text('إلغاء')),
+                TextButton(onPressed: ()=>Navigator.pop(context,true), child: const Text('حذف', style: TextStyle(color: AC.error)))]));
+    if (ok != true) return;
+    try { await AdminServicesRepo().deleteSubService(s.id); _load(); _ok(context, 'تم الحذف'); }
+    catch (e) { if (mounted) _err(context, '$e'); }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final subs = _selected?.subServices ?? const <SubService>[];
+    return Scaffold(
+      backgroundColor: AC.bg,
+      appBar: AppBar(
+        title: Text(widget.title), backgroundColor: widget.color,
+        actions: [
+          IconButton(icon: const Icon(Icons.person_add_alt_rounded), tooltip: 'مزود جديد', onPressed: _addProvider),
+          IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load),
+        ],
+      ),
+      body: _loading
+        ? const Center(child: CircularProgressIndicator(color: AC.primary))
+        : RefreshIndicator(color: widget.color, onRefresh: _load, child: ListView(
+            padding: const EdgeInsets.all(AD.md),
+            children: [
+              // Preview banner
+              Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(color: AC.infoBg, borderRadius: BorderRadius.circular(10)),
+                child: Row(children: const [
+                  Icon(Icons.visibility_rounded, color: AC.info, size: 18), SizedBox(width: 8),
+                  Expanded(child: Text('هذه معاينة لما يراه العميل — اضغط لإضافة أو تعديل', style: AT.cap)),
+                ])),
+              const SizedBox(height: AD.md),
+
+              // ── اختر مزود الخدمة (provider chips, like user app) ──
+              Text('اختر مزود الخدمة', style: AT.cap.copyWith(color: AC.textMuted)),
+              const SizedBox(height: 8),
+              SizedBox(height: 96, child: ListView(scrollDirection: Axis.horizontal, children: [
+                ..._providers.map((p) => _providerChip(p)),
+                _addChip(),
+              ])),
+              const SizedBox(height: AD.md),
+
+              // ── phone field (visual parity, disabled) ──
+              _previewCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('رقم الهاتف المراد شحنه', style: AT.cap),
+                const SizedBox(height: 6),
+                Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(border: Border.all(color: AC.border), borderRadius: BorderRadius.circular(12)),
+                  child: Row(children: const [Icon(Icons.phone_android_rounded, size: 20, color: AC.textMuted), SizedBox(width: 8), Text('رقم الهاتف', style: TextStyle(color: AC.textMuted))])),
+              ])),
+              const SizedBox(height: AD.md),
+
+              // ── products (sub-services) of the selected provider — editable ──
+              Row(children: [
+                Expanded(child: Text(_selected == null ? 'المنتجات' : 'منتجات ${_selected!.displayName}', style: AT.bodyM)),
+                if (_selected != null) TextButton.icon(onPressed: _addSub, icon: const Icon(Icons.add_rounded, size: 18), label: const Text('إضافة منتج')),
+              ]),
+              const SizedBox(height: 6),
+              if (_selected == null)
+                _previewCard(child: const Padding(padding: EdgeInsets.all(12), child: Center(child: Text('اختر مزوداً لعرض منتجاته'))))
+              else if (subs.isEmpty)
+                _previewCard(child: Padding(padding: const EdgeInsets.all(12), child: Column(children: [
+                  const Text('لا توجد منتجات بعد'),
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(onPressed: _addSub, icon: const Icon(Icons.add_rounded), label: const Text('إضافة منتج')),
+                ])))
+              else
+                ...subs.map((s) => _subCard(s)),
+              const SizedBox(height: AD.md),
+
+              // ── amount preview with quick amounts (from first product) ──
+              _previewCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('المبلغ', style: AT.cap),
+                const SizedBox(height: 6),
+                Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(border: Border.all(color: AC.border), borderRadius: BorderRadius.circular(12)),
+                  child: Row(children: const [Text('ج.م ', style: TextStyle(color: AC.primary, fontWeight: FontWeight.bold)), Text('أدخل المبلغ', style: TextStyle(color: AC.textMuted))])),
+                const SizedBox(height: 10),
+                Wrap(spacing: 8, runSpacing: 8, children: const [50,100,200,500,1000].map((a) =>
+                  Chip(label: Text('$a ج.م', style: const TextStyle(fontSize: 11)), backgroundColor: AC.surface, side: const BorderSide(color: AC.border))).toList()),
+              ])),
+              const SizedBox(height: AD.lg),
+              // disabled "شحن الآن" for parity
+              SizedBox(width: double.infinity, height: 48, child: ElevatedButton(
+                onPressed: null, style: ElevatedButton.styleFrom(backgroundColor: widget.color.withOpacity(0.4)),
+                child: const Text('شحن الآن (معاينة)', style: TextStyle(color: Colors.white)))),
+              const SizedBox(height: AD.xl),
+            ],
+          )),
+    );
+  }
+
+  Widget _previewCard({required Widget child}) => Container(
+    width: double.infinity, padding: const EdgeInsets.all(AD.md),
+    decoration: BoxDecoration(color: AC.surface, borderRadius: BorderRadius.circular(AD.r16), border: Border.all(color: AC.border)),
+    child: child);
+
+  Widget _providerChip(ServiceProvider p) {
+    final sel = _selected?.id == p.id;
+    return GestureDetector(
+      onTap: () => setState(() => _selected = p),
+      onLongPress: () => _providerMenu(p),
+      child: Container(
+        width: 92, margin: const EdgeInsets.only(left: 8),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: sel ? widget.color.withOpacity(0.10) : AC.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: sel ? widget.color : AC.border, width: sel ? 2 : 1),
+        ),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          p.logoUrl != null && p.logoUrl!.isNotEmpty
+            ? ClipRRect(borderRadius: BorderRadius.circular(10), child: CachedNetworkImage(imageUrl: p.logoUrl!, width: 38, height: 38, fit: BoxFit.cover,
+                errorWidget: (_,__,___) => Icon(Icons.smartphone_rounded, color: widget.color)))
+            : Container(width: 38, height: 38, decoration: BoxDecoration(color: widget.color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                child: Icon(Icons.smartphone_rounded, color: widget.color, size: 20)),
+          const SizedBox(height: 5),
+          Text(p.displayName, style: AT.cap.copyWith(fontSize: 10), maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
+          if (!p.isActive) Text('غير نشط', style: AT.cap.copyWith(fontSize: 8, color: AC.error)),
+        ]),
+      ),
+    );
+  }
+
+  Widget _addChip() => GestureDetector(
+    onTap: _addProvider,
+    child: Container(width: 92, margin: const EdgeInsets.only(left: 8),
+      decoration: BoxDecoration(color: AC.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: AC.primary, style: BorderStyle.solid)),
+      child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(Icons.add_circle_outline_rounded, color: AC.primary), SizedBox(height: 4),
+        Text('إضافة مزود', style: TextStyle(fontSize: 9, color: AC.primary)),
+      ])));
+
+  void _providerMenu(ServiceProvider p) {
+    showModalBottomSheet(context: context, builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      ListTile(leading: const Icon(Icons.edit_rounded, color: AC.primary), title: const Text('تعديل المزود'), onTap: () { Navigator.pop(context); _editProvider(p); }),
+      ListTile(leading: const Icon(Icons.add_a_photo_rounded, color: AC.primary), title: const Text('شعار المزود'), onTap: () { Navigator.pop(context); _providerLogo(p); }),
+      ListTile(leading: Icon(p.isActive ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: AC.info), title: Text(p.isActive ? 'إيقاف' : 'تفعيل'), onTap: () async { Navigator.pop(context); await AdminServicesRepo().updateProvider(p.id, {'isActive': !p.isActive}); _load(); }),
+      ListTile(leading: const Icon(Icons.delete_outline_rounded, color: AC.error), title: const Text('حذف المزود', style: TextStyle(color: AC.error)), onTap: () { Navigator.pop(context); _deleteProvider(p); }),
+    ])));
+  }
+
+  Widget _subCard(SubService s) {
+    final isReq = s.serviceMode == 'REQUEST';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: AC.surface, borderRadius: BorderRadius.circular(AD.r12), border: Border.all(color: AC.border)),
+      child: Row(children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(s.nameAr, style: AT.bodyM),
+          const SizedBox(height: 4),
+          Row(children: [
+            _FeeChip('ثابتة', '${s.fixedFee.toStringAsFixed(1)} ج.م', widget.color),
+            const SizedBox(width: 6),
+            _FeeChip('نسبة', '${(s.percentageFee*100).toStringAsFixed(2)}%', widget.color),
+            const SizedBox(width: 6),
+            Icon(isReq ? Icons.inbox_rounded : Icons.payments_rounded, size: 14, color: isReq ? AC.warning : AC.success),
+          ]),
+        ])),
+        IconButton(icon: const Icon(Icons.edit_rounded, size: 18, color: AC.primary), onPressed: () => _editSub(s)),
+        IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AC.error), onPressed: () => _deleteSub(s)),
+      ]),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════

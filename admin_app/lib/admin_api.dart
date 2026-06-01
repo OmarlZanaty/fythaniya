@@ -175,6 +175,15 @@ class AdminPayLaterRepo {
   }
   Future<void> settle(String userId, {double? amount}) =>
     _c.post('/admin/pay-later-debts/$userId/settle', body: amount != null ? {'amount': amount} : {});
+  // amount > 0 adds, < 0 deducts
+  Future<double> adjustBalance(String userId, double amount, {String? note}) async {
+    final res = await _c.post('/admin/clients/$userId/adjust-balance', body: {'amount': amount, if (note != null && note.isNotEmpty) 'note': note});
+    return double.tryParse((res['data']?['newBalance'] ?? 0).toString()) ?? 0;
+  }
+  Future<List<Map<String,dynamic>>> transactions(String userId) async {
+    final res = await _c.get('/admin/clients/$userId/pay-later-transactions');
+    return ((res['data'] as List<dynamic>?) ?? []).cast<Map<String,dynamic>>();
+  }
 }
 
 // ── Admin Home Tiles ──────────────────────────────────────

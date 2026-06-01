@@ -554,6 +554,37 @@ router.get('/admin/pay-later-debts', authenticateAdmin, async (req, res, next) =
   } catch (err) { next(err); }
 });
 
+// Admin: manually adjust a user's balance — amount can be POSITIVE (add /
+// credit) or NEGATIVE (deduct, e.g. company paid cash so reduce their balance).
+router.post('/admin/clients/:id/adjust-balance', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),
+  [body('amount').isFloat().custom(v => Number(v) !== 0).withMessage('المبلغ مطلوب'), body('note').optional().isLength({ max: 200 })],
+  validate, async (req, res, next) => {
+    try {
+      const amount = Number(req.body.amount); // + add, - deduct
+      const note = (req.body.note || (amount >= 0 ? 'إضافة رصيد' : 'خصم رصيد')).toString();
+      const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, fullName: true } });
+      if (!user) return apiResponse.error(res, 'Not found', 404);
+      const updated = await prisma.user.update({ where: { id: user.id }, data: { walletBalance: { increment: amount } }, select: { walletBalance: true } });
+      await prisma.transaction.create({ data: { userId: user.id, amount: Math.abs(amount), fee: 0, totalAmount: Math.abs(amount), status: 'SUCCESS', paymentMethod: amount >= 0 ? 'ADMIN_CREDIT' : 'ADMIN_DEBIT', externalRef: note } });
+      await prisma.auditLog.create({ data: { adminId: req.admin.id, action: amount >= 0 ? 'ADD_BALANCE' : 'DEDUCT_BALANCE', entity: 'user', entityId: user.id, details: `${amount} ج.م — ${note}` } });
+      await notifyUser(user.id, amount >= 0 ? '💰 تم إضافة رصيد' : '➖ تم خصم رصيد', `${Math.abs(amount)} ج.م — رصيدك الآن ${Number(updated.walletBalance)} ج.م`, 'HIGH');
+      return apiResponse.success(res, { newBalance: Number(updated.walletBalance) }, 'تم تعديل الرصيد');
+    } catch (err) { next(err); }
+  }
+);
+
+// Admin: a user's pay-later transaction history (charges + settlements) with dates.
+router.get('/admin/clients/:id/pay-later-transactions', authenticateAdmin, async (req, res, next) => {
+  try {
+    const txns = await prisma.transaction.findMany({
+      where: { userId: req.params.id, paymentMethod: { in: ['PAY_LATER', 'PAY_LATER_SETTLE'] } },
+      orderBy: { createdAt: 'desc' }, take: 100,
+      include: { request: { select: { type: true, phoneNumber: true, serviceProvider: { select: { displayName: true } } } } },
+    });
+    return apiResponse.success(res, txns);
+  } catch (err) { next(err); }
+});
+
 // Admin: settle (clear) a user's pay-later debt — sets wallet back to >= 0.
 // `amount` optional: partial settle; omitted = clear the whole debt to 0.
 router.post('/admin/pay-later-debts/:userId/settle', authenticateAdmin, requireRole('SUPER_ADMIN', 'B2B_MANAGER'),

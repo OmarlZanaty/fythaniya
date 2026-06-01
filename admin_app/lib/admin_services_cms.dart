@@ -1232,15 +1232,145 @@ class _PayLaterDebtsState extends State<PayLaterDebtsScreen> {
                 final owed = (u['owed'] as num?)?.toDouble() ?? 0;
                 final name = u['fullName']?.toString() ?? '—';
                 return Card(margin: const EdgeInsets.only(bottom: 10), child: ListTile(
+                  onTap: () => _openUser(u),
                   leading: CircleAvatar(backgroundColor: AC.warningBg, child: Text(name.isNotEmpty ? name[0] : '؟', style: AT.bodyM.copyWith(color: AC.warning))),
                   title: Text(name, style: AT.bodyM),
                   subtitle: Text('${u['phone']}', style: AT.cap, textDirection: TextDirection.ltr),
                   trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
                     Text('-${owed.toStringAsFixed(0)} ج.م', style: AT.bodyM.copyWith(color: AC.error, fontWeight: FontWeight.w700)),
-                    TextButton(onPressed: () => _settle(u), child: const Text('تسجيل سداد', style: TextStyle(fontSize: 11))),
+                    const Text('تفاصيل', style: TextStyle(fontSize: 10, color: AC.primary)),
                   ]),
                 ));
               })),
         ])),
+  );
+
+  // Company detail sheet: balance, add/deduct, pay-later transactions.
+  void _openUser(Map<String,dynamic> u) {
+    showModalBottomSheet(context: context, isScrollControlled: true,
+      backgroundColor: AC.surface, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _DebtDetailSheet(user: u, onChanged: _load));
+  }
+}
+
+// ── Debt detail sheet (balance + add/deduct + transactions) ──
+class _DebtDetailSheet extends StatefulWidget {
+  final Map<String,dynamic> user;
+  final VoidCallback onChanged;
+  const _DebtDetailSheet({required this.user, required this.onChanged});
+  @override State<_DebtDetailSheet> createState() => _DebtDetailSheetState();
+}
+class _DebtDetailSheetState extends State<_DebtDetailSheet> {
+  List<Map<String,dynamic>> _txns = [];
+  double _balance = 0;
+  bool _loading = true;
+
+  @override void initState() {
+    super.initState();
+    _balance = (widget.user['walletBalance'] as num?)?.toDouble() ?? 0;
+    _loadTxns();
+  }
+  Future<void> _loadTxns() async {
+    setState(() => _loading = true);
+    try { final t = await AdminPayLaterRepo().transactions(widget.user['id'] as String); if (mounted) setState(() { _txns = t; _loading = false; }); }
+    catch (e) { if (mounted) setState(() => _loading = false); }
+  }
+
+  Future<void> _adjust(bool add) async {
+    final r = await showDialog<Map<String,dynamic>>(context: context, builder: (_) => _AdjustBalanceDialog(add: add, userName: widget.user['fullName']?.toString() ?? ''));
+    if (r == null) return;
+    final amt = (r['amount'] as double) * (add ? 1 : -1);
+    try {
+      final nb = await AdminPayLaterRepo().adjustBalance(widget.user['id'] as String, amt, note: r['note'] as String?);
+      if (mounted) setState(() => _balance = nb);
+      widget.onChanged();
+      _loadTxns();
+      _ok(context, 'تم تعديل الرصيد');
+    } catch (e) { if (mounted) _err(context, '$e'); }
+  }
+
+  @override
+  Widget build(BuildContext ctx) {
+    final owes = _balance < 0;
+    return Padding(
+      padding: EdgeInsets.only(left: AD.md, right: AD.md, top: AD.md, bottom: MediaQuery.of(ctx).viewInsets.bottom + AD.md),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AC.border, borderRadius: BorderRadius.circular(2)))),
+        const SizedBox(height: 12),
+        Text(widget.user['fullName']?.toString() ?? '—', style: AT.h3),
+        Text('${widget.user['phone']}', style: AT.cap, textDirection: TextDirection.ltr),
+        const SizedBox(height: 12),
+        // Balance
+        Container(width: double.infinity, padding: const EdgeInsets.all(AD.md),
+          decoration: BoxDecoration(color: (owes ? AC.error : AC.success).withOpacity(0.08), borderRadius: BorderRadius.circular(AD.r12)),
+          child: Column(children: [
+            Text(owes ? 'مستحق على الشركة' : 'الرصيد', style: AT.cap.copyWith(color: owes ? AC.error : AC.success)),
+            const SizedBox(height: 4),
+            Text('${_balance.toStringAsFixed(2)} ج.م', style: AT.num.copyWith(color: owes ? AC.error : AC.success, fontSize: 24)),
+          ])),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: AC.success),
+            icon: const Icon(Icons.add_rounded), label: const Text('إضافة رصيد'), onPressed: () => _adjust(true))),
+          const SizedBox(width: 8),
+          Expanded(child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: AC.error),
+            icon: const Icon(Icons.remove_rounded), label: const Text('خصم رصيد'), onPressed: () => _adjust(false))),
+        ]),
+        const SizedBox(height: 16),
+        Text('سجل الدفع الآجل', style: AT.bodyM),
+        const SizedBox(height: 8),
+        SizedBox(height: 240, child: _loading
+          ? const Center(child: CircularProgressIndicator(color: AC.primary))
+          : _txns.isEmpty ? const Center(child: Text('لا توجد معاملات'))
+          : ListView.builder(itemCount: _txns.length, itemBuilder: (_, i) {
+              final t = _txns[i];
+              final settle = t['paymentMethod'] == 'PAY_LATER_SETTLE';
+              final amt = double.tryParse((t['amount'] ?? '0').toString()) ?? 0;
+              final date = (t['createdAt']?.toString() ?? '').replaceFirst('T', '  ').split('.').first;
+              final prov = t['request']?['serviceProvider']?['displayName']?.toString();
+              return ListTile(dense: true,
+                leading: Icon(settle ? Icons.check_circle_rounded : Icons.schedule_rounded, color: settle ? AC.success : AC.warning, size: 20),
+                title: Text(settle ? 'سداد' : (prov ?? 'دفع آجل'), style: AT.body),
+                subtitle: Text(date, style: AT.cap, textDirection: TextDirection.ltr),
+                trailing: Text('${settle ? '+' : '-'}${amt.toStringAsFixed(0)} ج.م',
+                  style: AT.bodyM.copyWith(color: settle ? AC.success : AC.error)),
+              );
+            })),
+        const SizedBox(height: 8),
+      ]),
+    );
+  }
+}
+
+// ── Add / deduct balance dialog ──
+class _AdjustBalanceDialog extends StatefulWidget {
+  final bool add; final String userName;
+  const _AdjustBalanceDialog({required this.add, required this.userName});
+  @override State<_AdjustBalanceDialog> createState() => _AdjustBalanceDialogState();
+}
+class _AdjustBalanceDialogState extends State<_AdjustBalanceDialog> {
+  final _amount = TextEditingController();
+  final _note = TextEditingController();
+  @override void dispose() { _amount.dispose(); _note.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext ctx) => AlertDialog(
+    title: Text(widget.add ? 'إضافة رصيد' : 'خصم رصيد — ${widget.userName}'),
+    content: Column(mainAxisSize: MainAxisSize.min, children: [
+      TextField(controller: _amount, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(labelText: 'المبلغ (ج.م)', border: OutlineInputBorder())),
+      const SizedBox(height: 10),
+      TextField(controller: _note, decoration: const InputDecoration(labelText: 'ملاحظة (اختياري)', border: OutlineInputBorder())),
+    ]),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+      ElevatedButton(
+        style: ElevatedButton.styleFrom(backgroundColor: widget.add ? AC.success : AC.error),
+        onPressed: () {
+          final a = double.tryParse(_amount.text.trim());
+          if (a == null || a <= 0) { ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('أدخل مبلغاً صحيحاً'), backgroundColor: AC.error)); return; }
+          Navigator.pop(ctx, {'amount': a, 'note': _note.text.trim().isEmpty ? null : _note.text.trim()});
+        },
+        child: Text(widget.add ? 'إضافة' : 'خصم')),
+    ],
   );
 }

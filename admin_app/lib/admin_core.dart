@@ -357,8 +357,10 @@ class SubService {
   final bool requiresPayLater;
   // AMOUNT = user enters amount + wallet deducted immediately
   // REQUEST = submit with amount=0, admin sets amount later (smart billing)
+  // BUNDLE  = fixed-price package; customer pays bundlePrice instantly
   final String serviceMode;
-  const SubService({required this.id,required this.serviceProviderId,required this.name,required this.nameAr,required this.category,required this.isActive,required this.fixedFee,required this.percentageFee,this.minAmount,this.maxAmount,this.imageUrl,this.requiresPayLater=false,this.serviceMode='AMOUNT'});
+  final double? bundlePrice;
+  const SubService({required this.id,required this.serviceProviderId,required this.name,required this.nameAr,required this.category,required this.isActive,required this.fixedFee,required this.percentageFee,this.minAmount,this.maxAmount,this.imageUrl,this.requiresPayLater=false,this.serviceMode='AMOUNT',this.bundlePrice});
   factory SubService.fromJson(Map<String,dynamic> j)=>SubService(
     id:j['id'] as String,serviceProviderId:j['serviceProviderId'] as String,
     name:j['name'] as String,nameAr:j['nameAr'] as String,category:j['category'] as String,
@@ -370,8 +372,10 @@ class SubService {
     imageUrl:j['imageUrl'] as String?,
     requiresPayLater:(j['requiresPayLater'] as bool?)??false,
     serviceMode:(j['serviceMode'] as String?)?? 'AMOUNT',
+    bundlePrice:j['bundlePrice']!=null?double.tryParse(j['bundlePrice'].toString()):null,
   );
   bool get isRequestMode => serviceMode == 'REQUEST';
+  bool get isBundle => serviceMode == 'BUNDLE';
 }
 
 class AdminUser {

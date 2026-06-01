@@ -75,20 +75,41 @@ class _RechargeScreenState extends State<RechargeScreen> {
               prefix: const Padding(padding: EdgeInsets.all(14), child: Icon(Icons.phone_android_rounded, size: 20))),
           ])),
           const SizedBox(height: D.md),
-          AmountPicker(ctrl: _amount, quickAmounts: _sub?.quickAmounts.isNotEmpty == true ? _sub!.quickAmounts : const [5, 10, 15, 25, 50, 100],
-            validator: (v) { if (v == null || v.isEmpty) return S.required; final a = double.tryParse(v); if (a == null || a < 5) return 'الحد الأدنى 5 ج.م'; if (a > 500) return 'الحد الأقصى 500 ج.م'; return null; }),
-          const SizedBox(height: D.md),
-          if (_amount.text.isNotEmpty && double.tryParse(_amount.text) != null) AppCard(child: Column(children: [
-            SummaryRow(label: 'المبلغ', value: '${_amount.text} ${S.egp}'),
-            SummaryRow(label: S.fee, value: '${_fee.toStringAsFixed(2)} ${S.egp}'),
-            const Divider(height: 20),
-            SummaryRow(label: S.total, value: '${((double.tryParse(_amount.text) ?? 0) + _fee).toStringAsFixed(2)} ${S.egp}', bold: true, valueColor: AppColors.primary),
-          ])),
+          // Bundle = fixed price (no amount entry). Otherwise show amount picker.
+          if (_sub?.isBundle == true) ...[
+            AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('سعر الباقة', style: TS.cap), const SizedBox(height: D.sm),
+              Row(children: [
+                const Icon(Icons.inventory_2_rounded, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text('${(_sub!.bundlePrice ?? 0).toStringAsFixed(2)} ${S.egp}', style: TS.h2.copyWith(color: AppColors.primary)),
+              ]),
+              if (_fee > 0) ...[ const Divider(height: 20),
+                SummaryRow(label: S.fee, value: '${_sub!.feeFor(_sub!.bundlePrice ?? 0).toStringAsFixed(2)} ${S.egp}'),
+                SummaryRow(label: S.total, value: '${_sub!.totalFor(_sub!.bundlePrice ?? 0).toStringAsFixed(2)} ${S.egp}', bold: true, valueColor: AppColors.primary),
+              ],
+            ])),
+          ] else ...[
+            AmountPicker(ctrl: _amount, quickAmounts: _sub?.quickAmounts.isNotEmpty == true ? _sub!.quickAmounts : const [5, 10, 15, 25, 50, 100],
+              validator: (v) { if (v == null || v.isEmpty) return S.required; final a = double.tryParse(v); if (a == null || a < 5) return 'الحد الأدنى 5 ج.م'; if (a > 500) return 'الحد الأقصى 500 ج.م'; return null; }),
+            const SizedBox(height: D.md),
+            if (_amount.text.isNotEmpty && double.tryParse(_amount.text) != null) AppCard(child: Column(children: [
+              SummaryRow(label: 'المبلغ', value: '${_amount.text} ${S.egp}'),
+              SummaryRow(label: S.fee, value: '${_fee.toStringAsFixed(2)} ${S.egp}'),
+              const Divider(height: 20),
+              SummaryRow(label: S.total, value: '${((double.tryParse(_amount.text) ?? 0) + _fee).toStringAsFixed(2)} ${S.egp}', bold: true, valueColor: AppColors.primary),
+            ])),
+          ],
           const SizedBox(height: D.lg),
-          AppButton(label: 'شحن الآن', isLoading: isSubmitting, onPressed: () async {
-            if (!_form.currentState!.validate() || _provider == null) return;
-            final amount = double.parse(_amount.text);
-            final total  = amount + _fee;
+          AppButton(label: _sub?.isBundle == true ? 'اشترِ الباقة' : 'شحن الآن', isLoading: isSubmitting, onPressed: () async {
+            final isBundle = _sub?.isBundle == true;
+            // For bundles skip amount validation (price is fixed); still need phone.
+            if (_provider == null) return;
+            if (isBundle) {
+              if (_phone.text.trim().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(S.required), backgroundColor: AppColors.error)); return; }
+            } else if (!_form.currentState!.validate()) { return; }
+            final amount = isBundle ? (_sub!.bundlePrice ?? 0) : double.parse(_amount.text);
+            final total  = amount + (_sub?.feeFor(amount) ?? _fee);
             // Gate on wallet balance — redirect to top-up if not enough.
             final hs = context.read<HomeBloc>().state;
             final balance = hs is HomeLoaded ? hs.user.walletBalance : 0.0;

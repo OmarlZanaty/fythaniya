@@ -111,7 +111,9 @@ model SubService {
   quickAmounts      String?
   // AMOUNT = user enters amount, deducted from wallet immediately
   // REQUEST = submit request with amount=0, admin sets amount later (smart-billing)
+  // BUNDLE = fixed-price package; customer taps and pays bundlePrice instantly
   serviceMode       String          @default("AMOUNT")
+  bundlePrice       Decimal?        @db.Decimal(12, 2)  // required when serviceMode = BUNDLE
   isActive          Boolean         @default(true)
   requiresPayLater  Boolean         @default(false)
   sortOrder         Int             @default(0)

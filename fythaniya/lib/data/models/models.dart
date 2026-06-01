@@ -93,12 +93,18 @@ class SubServiceModel {
   final bool isActive;
   final bool requiresPayLater;
   final int sortOrder;
+  final String serviceMode; // AMOUNT | REQUEST | BUNDLE
+  final double? bundlePrice;
 
   const SubServiceModel({required this.id, required this.serviceProviderId,
     required this.name, required this.nameAr, required this.category,
     this.description, this.imageUrl, this.minAmount, this.maxAmount,
     this.fixedFee=0, this.percentageFee=0, this.quickAmounts=const[],
-    this.isActive=true, this.requiresPayLater=false, this.sortOrder=0});
+    this.isActive=true, this.requiresPayLater=false, this.sortOrder=0,
+    this.serviceMode='AMOUNT', this.bundlePrice});
+
+  bool get isBundle  => serviceMode == 'BUNDLE';
+  bool get isRequest => serviceMode == 'REQUEST';
 
   factory SubServiceModel.fromJson(Map<String,dynamic> j) {
     List<int> qa = [];
@@ -128,6 +134,8 @@ class SubServiceModel {
       requiresPayLater: (j['requiresPayLater'] as bool?)??false,
       imageUrl: j['imageUrl'] as String?,
       sortOrder: (j['sortOrder'] as int?)??0,
+      serviceMode: (j['serviceMode'] as String?) ?? 'AMOUNT',
+      bundlePrice: j['bundlePrice']!=null ? double.tryParse(j['bundlePrice'].toString()) : null,
     );
   }
 

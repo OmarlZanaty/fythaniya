@@ -524,19 +524,27 @@ class _ServicePreviewState extends State<ServicePreviewScreen> {
 
   Widget _subCard(SubService s) {
     final isReq = s.serviceMode == 'REQUEST';
+    final isBundle = s.serviceMode == 'BUNDLE';
     return Container(
       margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: AC.surface, borderRadius: BorderRadius.circular(AD.r12), border: Border.all(color: AC.border)),
       child: Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(s.nameAr, style: AT.bodyM),
+          Row(children: [
+            Text(s.nameAr, style: AT.bodyM),
+            if (isBundle) ...[ const SizedBox(width: 8),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(color: AC.info.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                child: Text('${(s.bundlePrice ?? 0).toStringAsFixed(0)} ج.م', style: AT.cap.copyWith(color: AC.info, fontWeight: FontWeight.w700))) ],
+          ]),
           const SizedBox(height: 4),
           Row(children: [
             _FeeChip('ثابتة', '${s.fixedFee.toStringAsFixed(1)} ج.م', widget.color),
             const SizedBox(width: 6),
             _FeeChip('نسبة', '${(s.percentageFee*100).toStringAsFixed(2)}%', widget.color),
             const SizedBox(width: 6),
-            Icon(isReq ? Icons.inbox_rounded : Icons.payments_rounded, size: 14, color: isReq ? AC.warning : AC.success),
+            Icon(isBundle ? Icons.inventory_2_rounded : isReq ? Icons.inbox_rounded : Icons.payments_rounded,
+              size: 14, color: isBundle ? AC.info : isReq ? AC.warning : AC.success),
           ]),
         ])),
         IconButton(icon: const Icon(Icons.edit_rounded, size: 18, color: AC.primary), onPressed: () => _editSub(s)),
@@ -1003,8 +1011,9 @@ class _SubFormDialogState extends State<_SubFormDialog> {
   final _nameAr = TextEditingController();
   final _name   = TextEditingController();
   final _fixed  = TextEditingController(text: '0');
+  final _bundle = TextEditingController(); // bundle fixed price
   double _pct = 0;        // 0..30 → 0%..30%
-  String _mode = 'AMOUNT'; // AMOUNT | REQUEST
+  String _mode = 'AMOUNT'; // AMOUNT | REQUEST | BUNDLE
 
   @override void initState() {
     super.initState();
@@ -1015,65 +1024,63 @@ class _SubFormDialogState extends State<_SubFormDialog> {
       _fixed.text  = e.fixedFee.toStringAsFixed(2);
       _pct         = (e.percentageFee * 100).clamp(0, 30).toDouble();
       _mode        = e.serviceMode;
+      if (e.bundlePrice != null) _bundle.text = e.bundlePrice!.toStringAsFixed(2);
     }
   }
-  @override void dispose() { _nameAr.dispose(); _name.dispose(); _fixed.dispose(); super.dispose(); }
+  @override void dispose() { _nameAr.dispose(); _name.dispose(); _fixed.dispose(); _bundle.dispose(); super.dispose(); }
 
   @override
-  Widget build(BuildContext ctx) => AlertDialog(
-    title: Text(widget.existing == null ? 'خدمة فرعية جديدة' : 'تعديل الخدمة'),
+  Widget build(BuildContext ctx) {
+    final isBundle = _mode == 'BUNDLE';
+    return AlertDialog(
+    title: Text(widget.existing == null ? 'منتج جديد' : 'تعديل المنتج'),
     content: SizedBox(width: 360, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
       TextField(controller: _nameAr, decoration: const InputDecoration(labelText: 'الاسم بالعربية *', border: OutlineInputBorder())),
       const SizedBox(height: 10),
       TextField(controller: _name,   decoration: const InputDecoration(labelText: 'الاسم بالإنجليزية', border: OutlineInputBorder())),
       const SizedBox(height: 14),
-      // Fixed fee
-      TextField(controller: _fixed, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-        decoration: const InputDecoration(labelText: 'رسوم ثابتة (ج.م)', border: OutlineInputBorder(), suffixText: 'ج.م')),
-      const SizedBox(height: 14),
-      // Percentage slider
-      Row(children: [
-        const Icon(Icons.percent_rounded, size: 18, color: AC.primary),
-        const SizedBox(width: 6),
-        Text('نسبة العمولة: ', style: AT.cap),
-        Text('${_pct.toStringAsFixed(2)}%', style: AT.bodyM.copyWith(color: AC.primary, fontWeight: FontWeight.w700)),
-      ]),
-      Slider(value: _pct, min: 0, max: 30, divisions: 300, activeColor: AC.primary,
-        label: '${_pct.toStringAsFixed(2)}%',
-        onChanged: (v) => setState(() => _pct = v)),
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: const [
-        Text('0%', style: AT.cap), Text('5%', style: AT.cap), Text('10%', style: AT.cap), Text('30%', style: AT.cap),
-      ]),
-      const SizedBox(height: 14),
-      const Divider(),
-      // Service mode
-      Text('نوع الخدمة', style: AT.bodyM),
+      // Service type — 3 options
+      Text('نوع المنتج', style: AT.bodyM),
       const SizedBox(height: 8),
       Row(children: [
-        Expanded(child: _ModeCard(
-          selected: _mode == 'AMOUNT',
-          icon: Icons.payments_rounded,
-          title: 'يطلب مبلغ',
-          subtitle: 'المستخدم يدخل المبلغ ويُخصم فوراً',
-          color: AC.success,
-          onTap: () => setState(() => _mode = 'AMOUNT'),
-        )),
-        const SizedBox(width: 8),
-        Expanded(child: _ModeCard(
-          selected: _mode == 'REQUEST',
-          icon: Icons.inbox_rounded,
-          title: 'يرسل طلب',
-          subtitle: 'الإدارة تحدد المبلغ بعد الاستلام',
-          color: AC.warning,
-          onTap: () => setState(() => _mode = 'REQUEST'),
-        )),
+        Expanded(child: _ModeCard(selected: _mode=='AMOUNT', icon: Icons.payments_rounded, title: 'شحن بمبلغ',
+          subtitle: 'العميل يدخل المبلغ', color: AC.success, onTap: () => setState(() => _mode='AMOUNT'))),
+        const SizedBox(width: 6),
+        Expanded(child: _ModeCard(selected: _mode=='BUNDLE', icon: Icons.inventory_2_rounded, title: 'باقة بسعر',
+          subtitle: 'سعر ثابت تحدده', color: AC.info, onTap: () => setState(() => _mode='BUNDLE'))),
+        const SizedBox(width: 6),
+        Expanded(child: _ModeCard(selected: _mode=='REQUEST', icon: Icons.inbox_rounded, title: 'فاتورة بطلب',
+          subtitle: 'تحدد المبلغ لاحقاً', color: AC.warning, onTap: () => setState(() => _mode='REQUEST'))),
       ]),
+      const SizedBox(height: 14),
+      // Bundle price (only for BUNDLE)
+      if (isBundle) ...[
+        TextField(controller: _bundle, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+          decoration: const InputDecoration(labelText: 'سعر الباقة *', border: OutlineInputBorder(), suffixText: 'ج.م',
+            helperText: 'المبلغ الذي يدفعه العميل عند اختيار الباقة')),
+        const SizedBox(height: 14),
+      ],
+      // Fees (apply to AMOUNT + BUNDLE; for REQUEST admin sets total later)
+      if (!_mode.startsWith('REQUEST')) ...[
+        TextField(controller: _fixed, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+          decoration: const InputDecoration(labelText: 'رسوم ثابتة (ج.م)', border: OutlineInputBorder(), suffixText: 'ج.م')),
+        const SizedBox(height: 14),
+        Row(children: [
+          const Icon(Icons.percent_rounded, size: 18, color: AC.primary), const SizedBox(width: 6),
+          Text('نسبة العمولة: ', style: AT.cap),
+          Text('${_pct.toStringAsFixed(2)}%', style: AT.bodyM.copyWith(color: AC.primary, fontWeight: FontWeight.w700)),
+        ]),
+        Slider(value: _pct, min: 0, max: 30, divisions: 300, activeColor: AC.primary,
+          label: '${_pct.toStringAsFixed(2)}%', onChanged: (v) => setState(() => _pct = v)),
+      ],
     ]))),
     actions: [
       TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
       ElevatedButton(onPressed: () {
         if (_nameAr.text.trim().isEmpty) { ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('الاسم بالعربية مطلوب'), backgroundColor: AC.error)); return; }
+        if (isBundle && (double.tryParse(_bundle.text.trim()) ?? 0) <= 0) { ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('أدخل سعر الباقة'), backgroundColor: AC.error)); return; }
         Navigator.pop(ctx, <String,dynamic>{
           'nameAr': _nameAr.text.trim(),
           'name':   _name.text.trim().isEmpty ? _nameAr.text.trim() : _name.text.trim(),
@@ -1081,10 +1088,12 @@ class _SubFormDialogState extends State<_SubFormDialog> {
           'fixedFee':      double.tryParse(_fixed.text.trim()) ?? 0,
           'percentageFee': _pct / 100,
           'serviceMode':   _mode,
+          'bundlePrice':   isBundle ? double.tryParse(_bundle.text.trim()) : null,
         });
       }, child: const Text('حفظ')),
     ],
   );
+  }
 }
 
 // Mode selector card
